@@ -1,0 +1,1 @@
+import{Sa as e}from"./midnight_ledger_wasm-CnwQYouV.js";var t=e(((e,t)=>{t.exports={}}));export{t};
