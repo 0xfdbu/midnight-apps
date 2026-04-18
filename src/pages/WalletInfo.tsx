@@ -103,10 +103,10 @@ export function WalletInfoPage() {
             <label className="text-[12px] text-text-muted uppercase tracking-wider">Contract Address</label>
             <div 
               className="flex items-center justify-between p-3 bg-bg-tertiary/50 rounded-xl border border-border/40 cursor-pointer hover:border-border-hover transition-colors group"
-              onClick={() => handleCopy('12b8b577c4a72aaba67f9cc05e7eecfe2e761741a37fce9186b691c7ccc9f9e9', 'contract')}
+              onClick={() => handleCopy('db5d7cb3ed5ab23217abedb86831f6f5b23a9179e91e48dab88d819ef41b8e6d', 'contract')}
             >
               <span className="text-[13px] font-mono text-white truncate flex-1">
-                12b8b577...9e9
+                db5d7cb3...6d
               </span>
               <span className="ml-2 text-[12px] text-text-muted group-hover:text-white transition-colors">
                 {copied === 'contract' ? '✓' : '⎘'}

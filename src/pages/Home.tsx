@@ -102,7 +102,7 @@ export function HomePage() {
               </div>
               
               <a
-                href="https://github.com/0xfdbu/midnight-connect"
+                href="https://github.com/0xfdbu/midnight-apps"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-bg-tertiary/40 border border-border/80 rounded-xl text-sm font-medium text-text-muted hover:text-white hover:bg-bg-tertiary hover:border-border-hover transition-all duration-200 active:scale-[0.98]"

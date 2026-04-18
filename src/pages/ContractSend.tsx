@@ -84,15 +84,6 @@ export function ContractSendPage() {
 
         <div className="p-6 space-y-5">
           
-          {/* Info Box */}
-          <div className="flex gap-3 p-4 bg-amber-500/5 rounded-xl border-l-2 border-amber-500/30">
-            <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
-            </div>
-            <p className="text-[13px] text-text-secondary leading-relaxed">
-              Send tokens from the contract to an address. Tokens must be deposited into contract first via "Receive Tokens".
-            </p>
-          </div>
 
           {/* Contract Balance */}
           <div className="flex items-center justify-between p-4 bg-bg-tertiary rounded-xl">
