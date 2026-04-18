@@ -4,7 +4,25 @@
   "runtime-version": "0.15.0",
   "circuits": [
     {
-      "name": "mintStablecoin",
+      "name": "mintToContract",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "amount",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 18446744073709551615
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Bytes",
+        "length": 32
+      }
+    },
+    {
+      "name": "mintToUser",
       "pure": false,
       "proof": true,
       "arguments": [
@@ -35,25 +53,6 @@
       "result-type": {
         "type-name": "Bytes",
         "length": 32
-      }
-    },
-    {
-      "name": "burnStablecoin",
-      "pure": false,
-      "proof": true,
-      "arguments": [
-        {
-          "name": "amount",
-          "type": {
-            "type-name": "Uint",
-            "maxval": 340282366920938463463374607431768211455
-          }
-        }
-      ],
-      "result-type": {
-        "type-name": "Tuple",
-        "types": [
-        ]
       }
     },
     {
@@ -101,6 +100,25 @@
           "type": {
             "type-name": "Uint",
             "maxval": 340282366920938463463374607431768211455
+          }
+        }
+      ],
+      "result-type": {
+        "type-name": "Tuple",
+        "types": [
+        ]
+      }
+    },
+    {
+      "name": "burnStablecoin",
+      "pure": false,
+      "proof": true,
+      "arguments": [
+        {
+          "name": "amount",
+          "type": {
+            "type-name": "Uint",
+            "maxval": 18446744073709551615
           }
         }
       ],

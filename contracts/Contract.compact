@@ -5,7 +5,20 @@ import CompactStandardLibrary;
 export ledger totalSupply: Uint<64>;
 export ledger totalBurned: Uint<64>;
 
-export circuit mintStablecoin(amount: Uint<64>, recipient: UserAddress): Bytes<32> {
+// Mint tokens directly into the contract's own balance
+export circuit mintToContract(amount: Uint<64>): Bytes<32> {
+    const domain = pad(32, "stablecoin:usd");
+    const color = mintUnshieldedToken(
+        disclose(domain),
+        disclose(amount),
+        left<ContractAddress, UserAddress>(kernel.self())
+    );
+    totalSupply = totalSupply + disclose(amount) as Uint<64>;
+    return color;
+}
+
+// Mint tokens and send directly to a user (bypasses contract balance)
+export circuit mintToUser(amount: Uint<64>, recipient: UserAddress): Bytes<32> {
     const domain = pad(32, "stablecoin:usd");
     const color = mintUnshieldedToken(
         disclose(domain),
@@ -16,13 +29,7 @@ export circuit mintStablecoin(amount: Uint<64>, recipient: UserAddress): Bytes<3
     return color;
 }
 
-export circuit burnStablecoin(amount: Uint<128>): [] {
-    const domain = pad(32, "stablecoin:usd");
-    const color = tokenType(disclose(domain), kernel.self());
-    receiveUnshielded(color, disclose(amount));
-    totalBurned = totalBurned + disclose(amount) as Uint<64>;
-}
-
+// Send tokens from contract balance to a user
 export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
     const domain = pad(32, "stablecoin:usd");
     const color = tokenType(disclose(domain), kernel.self());
@@ -33,8 +40,18 @@ export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
     );
 }
 
+// Receive tokens into the contract (user deposits tokens to contract)
 export circuit receiveTokens(amount: Uint<128>): [] {
     const domain = pad(32, "stablecoin:usd");
     const color = tokenType(disclose(domain), kernel.self());
     receiveUnshielded(color, disclose(amount));
+}
+
+// Burn tokens by depositing them into the contract (removing from user circulation)
+// Uses Uint<64> to enforce safe cast at compile time
+export circuit burnStablecoin(amount: Uint<64>): [] {
+    const domain = pad(32, "stablecoin:usd");
+    const color = tokenType(disclose(domain), kernel.self());
+    receiveUnshielded(color, disclose(amount) as Uint<128>);
+    totalBurned = totalBurned + disclose(amount) as Uint<64>;
 }

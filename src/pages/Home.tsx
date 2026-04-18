@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { ConnectButton } from '../components/ui/ConnectButton';
+import { getContractState, getContractBalance, getUserStablecoinBalance } from '../hooks/wallet/services/contractCalls';
 
 // --- Icons ---
 function GithubIcon({ className }: { className?: string }) {
@@ -20,27 +22,6 @@ function ArrowUpRightIcon({ className }: { className?: string }) {
   );
 }
 
-function ArrowSwitchIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 3h5v5" />
-      <path d="M4 20L21 3" />
-      <path d="M21 16v5h-5" />
-      <path d="M15 15l6 6" />
-      <path d="M4 4l5 5" />
-    </svg>
-  );
-}
-
-function CodeIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="16 18 22 12 16 6" />
-      <polyline points="8 6 2 12 8 18" />
-    </svg>
-  );
-}
-
 function ChevronRightIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -50,7 +31,31 @@ function ChevronRightIcon({ className }: { className?: string }) {
 }
 
 export function HomePage() {
-  const { isConnected } = useWalletStore();
+  const { isConnected, connectedApi } = useWalletStore();
+  const [totalSupply, setTotalSupply] = useState<bigint>(0n);
+  const [contractBalance, setContractBalance] = useState<bigint>(0n);
+  const [walletBalance, setWalletBalance] = useState<bigint>(0n);
+
+  useEffect(() => {
+    if (!isConnected || !connectedApi) return;
+    
+    const fetchData = async () => {
+      try {
+        const [state, cb, wb] = await Promise.all([
+          getContractState(),
+          getContractBalance(),
+          getUserStablecoinBalance(connectedApi)
+        ]);
+        setTotalSupply(state.totalSupply);
+        setContractBalance(cb);
+        setWalletBalance(wb);
+      } catch (err) {
+        console.error('[Dashboard] Error fetching data:', err);
+      }
+    };
+
+    fetchData();
+  }, [isConnected, connectedApi]);
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -82,10 +87,10 @@ export function HomePage() {
             {/* Headline & Subheadline */}
             <div className="space-y-4 mb-10">
               <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white">
-                Midnight <span className="text-text-muted">Connect</span>
+                Midnight <span className="text-text-muted">App</span>
               </h1>
               <p className="text-text-muted text-[16px] leading-relaxed max-w-md">
-                A secure interface for shielded transfers and atomic swaps. 
+                A secure interface for managing an unshielded stablecoin vault.
                 Connect your wallet to get started.
               </p>
             </div>
@@ -126,96 +131,157 @@ export function HomePage() {
             <p className="text-text-muted text-[14px] mt-1">What would you like to do?</p>
           </div>
 
+          {/* Stats Row */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Total Supply</p>
+              <p className="text-xl font-semibold text-white">{totalSupply.toString()}</p>
+            </div>
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Contract Balance</p>
+              <p className="text-xl font-semibold text-white">{contractBalance.toString()}</p>
+            </div>
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Wallet Balance</p>
+              <p className="text-xl font-semibold text-white">{walletBalance.toString()}</p>
+            </div>
+          </div>
+
           {/* Action Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            
-            {/* Transfer Card */}
-            <Link
-              to="/transfer"
-              className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-            >
-              <div className="flex items-start justify-between mb-6">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 transition-colors">
-                  <ArrowUpRightIcon className="w-5 h-5" />
-                </div>
-                <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-              </div>
-              
-              <div className="space-y-1">
-                <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
-                  Transfer
-                </h3>
-                <p className="text-[13px] text-text-muted leading-snug">
-                  Send NIGHT tokens to any address.
-                </p>
-              </div>
-            </Link>
+          <div className="space-y-6">
 
-            {/* Contract Call Card */}
-            <Link
-              to="/contract-call"
-              className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-            >
-              <div className="flex items-start justify-between mb-6">
-                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500/20 transition-colors">
-                  <CodeIcon className="w-5 h-5" />
-                </div>
-                <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-              </div>
-              
-              <div className="space-y-1">
-                <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
-                  Contract Call
-                </h3>
-                <p className="text-[13px] text-text-muted leading-snug">
-                  Interact with the deployed token contract.
-                </p>
-              </div>
-            </Link>
+            {/* User Wallet Section */}
+            <div>
+              <h3 className="text-[12px] font-medium uppercase tracking-widest text-text-muted/60 mb-3">User Wallet</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Send Tokens (Direct) */}
+                <Link
+                  to="/send"
+                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 transition-colors">
+                      <ArrowUpRightIcon className="w-5 h-5" />
+                    </div>
+                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
+                      Send Tokens
+                    </h3>
+                    <p className="text-[13px] text-text-muted leading-snug">
+                      Send stablecoins directly from your wallet.
+                    </p>
+                  </div>
+                </Link>
 
-            {/* Swap Card */}
-            <Link
-              to="/swap"
-              className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-            >
-              <div className="flex items-start justify-between mb-6">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-colors">
-                  <ArrowSwitchIcon className="w-5 h-5" />
-                </div>
-                <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-              </div>
-              
-              <div className="space-y-1">
-                <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
-                  Create Swap
-                </h3>
-                <p className="text-[13px] text-text-muted leading-snug">
-                  Create an atomic swap intent to trade tokens.
-                </p>
-              </div>
-            </Link>
+                {/* Wallet Info */}
+                <Link
+                  to="/wallet-info"
+                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:bg-purple-500/20 transition-colors">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="4" width="20" height="16" rx="2" />
+                        <path d="M2 10h20" />
+                      </svg>
+                    </div>
+                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
+                      Wallet Info
+                    </h3>
+                    <p className="text-[13px] text-text-muted leading-snug">
+                      View your balance and copy address.
+                    </p>
+                  </div>
+                </Link>
 
-            {/* Complete Swap Card */}
-            <Link
-              to="/complete-swap"
-              className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-            >
-              <div className="flex items-start justify-between mb-6">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
-                  <ArrowSwitchIcon className="w-5 h-5" />
-                </div>
-                <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
               </div>
-              
-              <div className="space-y-1">
-                <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
-                  Complete Swap
-                </h3>
-                <p className="text-[13px] text-text-muted leading-snug">
-                  Submit a sealed transaction to finalize a swap.
-                </p>
+            </div>
+
+            {/* Contract Operations Section */}
+            <div>
+              <h3 className="text-[12px] font-medium uppercase tracking-widest text-text-muted/60 mb-3">Contract Operations</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Mint Tokens */}
+                <Link
+                  to="/mint"
+                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                      </svg>
+                    </div>
+                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
+                      Mint Tokens
+                    </h3>
+                    <p className="text-[13px] text-text-muted leading-snug">
+                      Mint new stablecoins from the contract.
+                    </p>
+                  </div>
+                </Link>
+
+                {/* Contract Send Tokens */}
+                <Link
+                  to="/contract-send"
+                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-colors">
+                      <ArrowUpRightIcon className="w-5 h-5" />
+                    </div>
+                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
+                      Contract Send
+                    </h3>
+                    <p className="text-[13px] text-text-muted leading-snug">
+                      Send tokens from contract to an address.
+                    </p>
+                  </div>
+                </Link>
+
+                {/* Receive Tokens (Deposit into Contract) */}
+                <Link
+                  to="/receive"
+                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500/20 transition-colors">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                      </svg>
+                    </div>
+                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
+                      Receive Tokens
+                    </h3>
+                    <p className="text-[13px] text-text-muted leading-snug">
+                      Deposit tokens into the contract.
+                    </p>
+                  </div>
+                </Link>
+
               </div>
-            </Link>
+            </div>
 
           </div>
         </div>

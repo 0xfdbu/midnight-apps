@@ -10,11 +10,13 @@ import type { WalletAddresses, WalletBalances } from './wallet/wallet.types';
 import { isWalletError, handleWalletError, extractNodeError } from './wallet/wallet.utils';
 import {
   mintToContract,
+  receiveTokens,
+  sendToUser,
 } from './wallet/services/contractCalls';
 import {
   loadWalletState,
   makeTransfer,
-  completeSwapTransaction,
+  sendStablecoin,
   checkConnectionStatus,
 } from './wallet/services/walletState';
 
@@ -46,8 +48,25 @@ export interface WalletState {
   connect: (networkId: string) => Promise<void>;
   loadWalletState: () => Promise<void>;
   makeTransfer: (recipient: string, amount: bigint) => Promise<void>;
-  mintToContract: (amount: bigint, recipientAddress: Uint8Array) => Promise<void>;
-  completeSwap: (sealedTransaction: string) => Promise<void>;
+  mintToContract: (amount: bigint) => Promise<void>;
+  sendStablecoin: (recipient: string, amount: bigint) => Promise<void>;
+  receiveTokens: (
+    connectedApi: ConnectedAPI,
+    coinPublicKey: string,
+    shieldedAddresses: { shieldedEncryptionPublicKey: string },
+    amount: bigint,
+    onSuccess: (txId: string) => void,
+    onError: (err: string) => void
+  ) => Promise<void>;
+  contractSend: (
+    connectedApi: ConnectedAPI,
+    coinPublicKey: string,
+    shieldedAddresses: { shieldedEncryptionPublicKey: string },
+    amount: bigint,
+    recipientAddress: Uint8Array,
+    onSuccess: (txId: string) => void,
+    onError: (err: string) => void
+  ) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -92,6 +111,9 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       const status = await connectedApi.getConnectionStatus();
       if (status.status === 'connected') {
         setNetworkId(status.networkId);
+        if (wallet.rdns) {
+          localStorage.setItem('midnight_last_wallet', wallet.rdns);
+        }
       }
       setConnectedApi(connectedApi);
       setShowAccountModal(true);
@@ -185,7 +207,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     }
   },
 
-  mintToContract: async (amount, recipientAddress) => {
+  mintToContract: async (amount) => {
     const { connectedApi, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
     if (!connectedApi) {
       setError('Not connected');
@@ -212,7 +234,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         coinPublicKey,
         shieldedAddresses,
         amount,
-        recipientAddress,
         (txId: string) => {
           setTransactionHash(txId);
           loadWalletState();
@@ -234,29 +255,58 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     }
   },
 
-  completeSwap: async (sealedTransaction) => {
-    const { connectedApi, setIsSubmitting, setError, loadWalletState } = get();
+  sendStablecoin: async (recipient, amount) => {
+    const { connectedApi, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
+    if (!connectedApi) {
+      setError('Not connected');
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
+    setTransactionHash(null);
 
     try {
-      if (!connectedApi) {
-        setError('Wallet not connected');
+      const isConnected = await checkConnectionStatus(connectedApi);
+      if (!isConnected) {
+        useWalletStore.getState().resetConnection();
+        setError('Wallet disconnected. Please reconnect.');
         return;
       }
-      await completeSwapTransaction(
+
+      await sendStablecoin(
         connectedApi,
-        sealedTransaction,
-        async () => {
-          await loadWalletState();
+        recipient,
+        amount,
+        () => {
+          setTransactionHash('transfer-success');
+          loadWalletState();
         },
-        (err) => {
-          setError(err);
+        (errMsg) => {
+          setError(errMsg);
         }
       );
+    } catch (err) {
+      console.error('Send stablecoin error:', err);
+      if (isWalletError(err) && err.code === 'Disconnected') {
+        useWalletStore.getState().resetConnection();
+        setError('Wallet disconnected. Please reconnect.');
+      } else {
+        setError(handleWalletError(err));
+      }
     } finally {
       setIsSubmitting(false);
+    }
+  },
+
+  receiveTokens,
+
+  contractSend: async (connectedApi, coinPublicKey, shieldedAddresses, amount, recipientAddress, onSuccess, onError) => {
+    try {
+      await sendToUser(connectedApi, coinPublicKey, shieldedAddresses, amount, recipientAddress, onSuccess, onError);
+    } catch (err) {
+      console.error('Contract send error:', err);
+      onError(err instanceof Error ? err.message : String(err));
     }
   },
 
@@ -273,6 +323,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   disconnect: () => {
+    localStorage.removeItem('midnight_last_wallet');
     set({
       connectedApi: null,
       isConnected: false,

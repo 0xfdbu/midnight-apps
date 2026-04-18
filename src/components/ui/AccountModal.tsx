@@ -3,8 +3,9 @@ import { useWalletStore } from '../../hooks/useWallet';
 import laceSvg from '../../assets/lace.svg?url';
 import iamSvg from '../../assets/1am.svg?url';
 import nightSvg from '../../assets/night.svg?url';
+import { nativeToken } from '@midnight-ntwrk/ledger-v8';
 
-const NIGHT = '0000000000000000000000000000000000000000000000000000000000000000';
+const NIGHT = nativeToken().raw;
 
 function formatAddress(addr: string): string {
   return addr.length > 16 ? `${addr.slice(0, 6)}...${addr.slice(-6)}` : addr;
@@ -20,9 +21,9 @@ function formatBalance(amount: bigint | undefined): string {
     return (value / 1_000_000).toFixed(2) + 'M';
   }
   if (value >= 1_000) {
-    return (value / 1_000).toFixed(1) + 'K';
+    return (value / 1_000).toFixed(2) + 'K';
   }
-  return value.toFixed(4);
+  return value.toFixed(2);
 }
 
 const DOT: Record<string, string> = {
@@ -186,7 +187,7 @@ export function AccountModal() {
             </span>
             <div className="flex items-baseline gap-1">
               <span className="text-lg font-medium text-white/80">
-                {balances?.dust ? formatBalance(balances.dust.balance) : '0.00'}
+                {balances?.dust ? (Number(balances.dust.balance) / 1000000000000000).toFixed(2) : '0.00'}
               </span>
               {balances?.dust && <img src={nightSvg} alt="N" className="w-4 h-4" />}
             </div>

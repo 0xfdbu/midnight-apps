@@ -4,39 +4,42 @@ export type Witnesses<PS> = {
 }
 
 export type ImpureCircuits<PS> = {
-  mintStablecoin(context: __compactRuntime.CircuitContext<PS>,
-                 amount_0: bigint,
-                 recipient_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, Uint8Array>;
-  burnStablecoin(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  mintToContract(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, Uint8Array>;
+  mintToUser(context: __compactRuntime.CircuitContext<PS>,
+             amount_0: bigint,
+             recipient_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, Uint8Array>;
   sendToUser(context: __compactRuntime.CircuitContext<PS>,
              amount_0: bigint,
              userAddr_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, []>;
   receiveTokens(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  burnStablecoin(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
 }
 
 export type ProvableCircuits<PS> = {
-  mintStablecoin(context: __compactRuntime.CircuitContext<PS>,
-                 amount_0: bigint,
-                 recipient_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, Uint8Array>;
-  burnStablecoin(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  mintToContract(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, Uint8Array>;
+  mintToUser(context: __compactRuntime.CircuitContext<PS>,
+             amount_0: bigint,
+             recipient_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, Uint8Array>;
   sendToUser(context: __compactRuntime.CircuitContext<PS>,
              amount_0: bigint,
              userAddr_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, []>;
   receiveTokens(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  burnStablecoin(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
 }
 
 export type PureCircuits = {
 }
 
 export type Circuits<PS> = {
-  mintStablecoin(context: __compactRuntime.CircuitContext<PS>,
-                 amount_0: bigint,
-                 recipient_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, Uint8Array>;
-  burnStablecoin(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  mintToContract(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, Uint8Array>;
+  mintToUser(context: __compactRuntime.CircuitContext<PS>,
+             amount_0: bigint,
+             recipient_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, Uint8Array>;
   sendToUser(context: __compactRuntime.CircuitContext<PS>,
              amount_0: bigint,
              userAddr_0: { bytes: Uint8Array }): __compactRuntime.CircuitResults<PS, []>;
   receiveTokens(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
+  burnStablecoin(context: __compactRuntime.CircuitContext<PS>, amount_0: bigint): __compactRuntime.CircuitResults<PS, []>;
 }
 
 export type Ledger = {

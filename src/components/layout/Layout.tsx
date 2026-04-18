@@ -23,7 +23,7 @@ export function Layout({ children, className }: LayoutProps) {
           {/* Structured Logo */}
           <Link to="/" className="flex items-center gap-2.5 group">
             <span className="text-[15px] font-semibold tracking-tight text-white">
-              Midnight <span className="text-text-muted">Connect</span>
+              Midnight <span className="text-text-muted">App</span>
             </span>
           </Link>
 

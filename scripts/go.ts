@@ -171,7 +171,7 @@ async function ensureDust(ctx: WalletContext): Promise<void> {
       Rx.throttleTime(5_000),
       Rx.filter((s: any) => s.isSynced),
       Rx.filter((s: any) => (s.dust?.balance(new Date()) ?? 0n) > 0n),
-      Rx.timeout(1_200_000),
+      Rx.timeout(7_200_000),
     ),
   );
   console.log('  ✅ DUST ready');
@@ -208,7 +208,7 @@ async function main() {
         Rx.throttleTime(5_000),
         Rx.tap((s: any) => console.log(`  isSynced: ${s.isSynced}`)),
         Rx.filter((s: any) => s.isSynced),
-        Rx.timeout(1_200_000),
+        Rx.timeout(7_200_000),
       ),
     );
     console.log('✅ Wallet synced');
