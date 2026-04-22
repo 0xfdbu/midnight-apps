@@ -1,0 +1,9 @@
+export const COMPATIBLE_CONNECTOR_API_VERSION = '4.x';
+export const CONTRACT_PATH = '/src/contracts';
+export const CONTRACT_ADDRESS = 'fafa7061a3eab83f8352855a655408ce533ce35cd59f34e14cf7e5364b7daa6d';
+export const INDEXER_HTTP = 'https://indexer.preprod.midnight.network/api/v4/graphql';
+export const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
+export const PROOF_SERVER = 'http://localhost:6300';
+export const PRIVATE_STATE_STORE = 'membership';
+export const PRIVATE_STATE_ID = 'membershipState';
+export const PRIVATE_STATE_PASSWORD = 'MembershipApp2026!';

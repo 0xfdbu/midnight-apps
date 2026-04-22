@@ -1,0 +1,76 @@
+pragma language_version 0.22;
+import CompactStandardLibrary;
+
+export sealed ledger admin: ZswapCoinPublicKey;
+export sealed ledger registrationFee: Uint<128>;
+
+export ledger hashedMembers: Set<Bytes<32>>;
+export ledger usedNullifiers: Set<Bytes<32>>;
+export ledger totalRegistrations: Counter;
+export ledger totalProofs: Counter;
+
+witness localSecretKey(): Bytes<32>;
+witness localPrivateValue(): Uint<32>;
+witness tokenColor(): Bytes<32>;
+
+constructor() {
+    admin = ownPublicKey();
+    registrationFee = 1000000;
+}
+
+circuit commitment(sk: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<2, Bytes<32>>>([pad(32, "mydapp:commit:v1"), sk]);
+}
+
+circuit nullifier(sk: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<2, Bytes<32>>>([pad(32, "mydapp:nullify:v1"), sk]);
+}
+
+// --- User: Join (pays fee) ---
+export circuit register(): [] {
+    const sk = localSecretKey();
+    const commit = commitment(sk);
+
+    assert(
+        !hashedMembers.member(disclose(commit)),
+        "Already registered"
+    );
+
+    receiveUnshielded(disclose(tokenColor()), registrationFee);
+
+    hashedMembers.insert(disclose(commit));
+    totalRegistrations.increment(1);
+}
+
+// --- User: Prove eligibility (one-time per nullifier) ---
+export circuit proveEligibility(): Boolean {
+    const sk = localSecretKey();
+    const commit = commitment(sk);
+
+    assert(
+        hashedMembers.member(disclose(commit)),
+        "Not registered"
+    );
+
+    const nul = nullifier(sk);
+    assert(!usedNullifiers.member(disclose(nul)), "Eligibility already proven");
+
+    usedNullifiers.insert(disclose(nul));
+    totalProofs.increment(1);
+
+    const privateVal = localPrivateValue();
+    const eligible = privateVal >= 100;
+
+    return disclose(eligible);
+}
+
+// --- Admin: Withdraw funds ---
+export circuit withdraw(to: UserAddress, amount: Uint<128>): [] {
+    assert(admin == ownPublicKey(), "Not the admin");
+
+    sendUnshielded(
+        disclose(tokenColor()),
+        disclose(amount),
+        right<ContractAddress, UserAddress>(disclose(to))
+    );
+}
