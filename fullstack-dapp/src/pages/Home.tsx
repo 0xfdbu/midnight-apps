@@ -1,31 +1,212 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
-import { ConnectButton } from '../components/ui/ConnectButton';
+import * as contractModule from '../contracts/managed/attest/contract/index.js';
 
-const ANALYTICS_API = 'http://localhost:3001';
+function toHexString(bytes: Uint8Array): string {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
-function GithubIcon({ className }: { className?: string }) {
+function fromHexString(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function domainToBytes(domain: string): Uint8Array {
+  const bytes = new Uint8Array(32);
+  const encoded = new TextEncoder().encode(domain);
+  bytes.set(encoded.slice(0, 32));
+  return bytes;
+}
+
+type Domain = 'age' | 'residency' | 'certification';
+
+function ShieldIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   );
 }
 
-function ChevronRightIcon({ className }: { className?: string }) {
+function KeyIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
     </svg>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+function UserIcon({ className }: { className?: string }) {
   return (
-    <div className="bg-bg-tertiary/60 border border-border/60 rounded-xl p-4 text-center">
-      <p className="text-3xl font-bold text-white">{value}</p>
-      <p className="text-xs text-text-muted uppercase tracking-wider mt-1">{label}</p>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function SettingsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function CopyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function SessionCard({
+  contractAddress,
+  secretKey,
+}: {
+  contractAddress: string;
+  secretKey: Uint8Array;
+}) {
+  const [domain, setDomain] = useState<Domain>('age');
+  const [commitHex, setCommitHex] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [copiedCommit, setCopiedCommit] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const commitment = contractModule.pureCircuits.getCommitment(
+        secretKey,
+        domainToBytes(domain)
+      );
+      setCommitHex(toHexString(commitment));
+      setError(null);
+    } catch (e) {
+      setError('Commitment circuit not exported — add `export` to the circuit in Contract.compact');
+      setCommitHex('');
+    }
+  }, [secretKey, domain]);
+
+  const copy = (text: string, type: 'commit' | 'addr') => {
+    navigator.clipboard.writeText(text);
+    if (type === 'commit') {
+      setCopiedCommit(true);
+      setTimeout(() => setCopiedCommit(false), 1500);
+    }
+  };
+
+  const shortAddr = `${contractAddress.slice(0, 8)}...${contractAddress.slice(-6)}`;
+
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+      {/* Header — always visible, compact */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+      >
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-white/[0.06] shrink-0 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <div className="text-left min-w-0">
+            <p className="text-[14px] font-medium text-white/80">Your Session</p>
+            <p className="text-[12px] font-mono text-white/25 truncate">{shortAddr}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); copy(contractAddress, 'addr'); }}
+            className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors text-white/20 hover:text-white/50"
+          >
+            <CopyIcon className="w-3.5 h-3.5" />
+          </button>
+          <svg
+            className={`w-4 h-4 text-white/20 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </div>
+      </button>
+
+      {/* Expanded panel */}
+      <div
+        className={`transition-all duration-300 ease-in-out overflow-hidden ${expanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'}`}
+      >
+        <div className="border-t border-white/[0.05] px-5 py-5 space-y-5">
+          {/* Full address */}
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-2">Contract Address</p>
+            <div className="flex items-center gap-2">
+              <p className="flex-1 text-[12px] font-mono text-white/40 break-all leading-relaxed px-3 py-2 bg-white/[0.02] rounded-lg">
+                {contractAddress}
+              </p>
+              <button
+                onClick={() => copy(contractAddress, 'addr')}
+                className="p-2 bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-colors text-white/25 hover:text-white/50 shrink-0"
+              >
+                <CopyIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-white/[0.04]" />
+
+          {/* Commitment builder */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium">Commitment</p>
+              <p className="text-[11px] text-white/15">Share with authority</p>
+            </div>
+
+            <div className="flex items-end gap-3">
+              <div className="flex-1 min-w-0">
+                <select
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value as Domain)}
+                  className="w-full px-3.5 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/15 transition-colors appearance-none cursor-pointer mb-2.5"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23444' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center' }}
+                >
+                  <option value="age" className="bg-[#0a0a0a] text-white">Age</option>
+                  <option value="residency" className="bg-[#0a0a0a] text-white">Residency</option>
+                  <option value="certification" className="bg-[#0a0a0a] text-white">Certification</option>
+                </select>
+
+                {error ? (
+                  <div className="px-3.5 py-2.5 bg-red-500/[0.05] border border-red-500/[0.08] rounded-xl">
+                    <p className="text-[12px] text-red-400/70 leading-relaxed">{error}</p>
+                  </div>
+                ) : (
+                  <div className="px-3.5 py-2.5 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                    <p className="text-[11px] font-mono text-white/30 break-all leading-[1.7]">
+                      {commitHex || '...'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => copy(commitHex, 'commit')}
+                disabled={!commitHex}
+                className="px-4 py-2.5 bg-white hover:bg-white/90 disabled:opacity-20 disabled:cursor-not-allowed text-black text-[12px] font-medium rounded-xl transition-all whitespace-nowrap h-fit"
+              >
+                {copiedCommit ? 'Done' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -33,241 +214,197 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 export function HomePage() {
   const { isConnected } = useWalletStore();
   const [contractAddress, setContractAddress] = useState<string | null>(null);
-  const [contractData, setContractData] = useState<any>(null);
-  const [apiStatus, setApiStatus] = useState<any>(null);
-
-  const loadContractData = useCallback(async () => {
-    const addr = contractAddress || localStorage.getItem('membership_contract');
-    if (!addr) return;
-    
-    try {
-      const [statusRes, contractRes] = await Promise.all([
-        fetch(`${ANALYTICS_API}/status`),
-        fetch(`${ANALYTICS_API}/contract/${addr}`),
-      ]);
-      
-      const status = await statusRes.json();
-      const contract = await contractRes.json();
-      
-      setApiStatus(status);
-      if (contractRes.ok) {
-        setContractData(contract);
-      }
-    } catch {}
-  }, [contractAddress]);
+  const [secretKey, setSecretKey] = useState<Uint8Array | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [newContractAddress, setNewContractAddress] = useState('');
+  const [stats, setStats] = useState<{totalAgeProofs: number; totalResidencyProofs: number; totalCertProofs: number} | null>(null);
 
   useEffect(() => {
-    const addr = localStorage.getItem('membership_contract');
+    const addr = localStorage.getItem('attest_contract');
+    const sk = localStorage.getItem('attest_secret_key');
+    setContractAddress(addr);
+    if (sk) {
+      setSecretKey(fromHexString(sk));
+    }
     if (addr) {
-      setContractAddress(addr);
+      fetch('http://localhost:3001/contract')
+        .then(r => r.json())
+        .then(d => setStats(d))
+        .catch(() => setStats(null));
     }
   }, []);
 
-  useEffect(() => {
-    loadContractData();
-    const interval = setInterval(loadContractData, 10000);
-    return () => clearInterval(interval);
-  }, [loadContractData]);
+  const saveContract = async () => {
+    if (newContractAddress) {
+      localStorage.setItem('attest_contract', newContractAddress);
+      setContractAddress(newContractAddress);
+      setNewContractAddress('');
+      setShowSettings(false);
+
+      try {
+        const d = await fetch('http://localhost:3001/contract').then(r => r.json());
+        setStats(d);
+      } catch {}
+    }
+  };
+
+  const clearContract = () => {
+    localStorage.removeItem('attest_contract');
+    localStorage.removeItem('attest_private_state');
+    localStorage.removeItem('attest_secret_key');
+    setContractAddress(null);
+    setSecretKey(null);
+    setShowSettings(false);
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      
-      {!isConnected && (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] text-center relative overflow-hidden">
-          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-500/10 blur-[150px] pointer-events-none" />
-          <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-500/5 blur-[100px] pointer-events-none" />
-          
-          <div className="relative z-10 flex flex-col items-center max-w-lg">
-            
-            <div className="mb-8 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-border/80 bg-bg-tertiary/40 text-[12px] font-medium text-text-muted">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-              Zero-Knowledge Membership
+      {!isConnected ? (
+        <div className="flex flex-col items-center justify-center min-h-[80vh] text-center relative">
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-white/[0.02] blur-[120px] pointer-events-none rounded-full" />
+
+          <div className="relative z-10 flex flex-col items-center max-w-xl px-6">
+            <div className="mb-10 inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-white/[0.06] bg-white/[0.02] text-[11px] font-medium text-white/40 uppercase tracking-widest">
+              <span className="w-1.5 h-1.5 rounded-full bg-white/60" />
+              Midnight Network
             </div>
 
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center mb-8 shadow-xl shadow-indigo-500/10">
-              <svg className="w-10 h-10 text-indigo-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" />
-                <path d="M9 12L11 14L15 10" strokeWidth="2" />
-              </svg>
-            </div>
-            
-            <div className="space-y-4 mb-10">
-              <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-white">
-                Membership <span className="text-text-muted">Club</span>
-              </h1>
-              <p className="text-text-muted text-[16px] leading-relaxed max-w-md">
-                Private membership with ZK proofs.
-                Pay to join, prove eligibility without revealing identity.
-              </p>
+            <div className="w-[72px] h-[72px] rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-10">
+              <ShieldIcon className="w-8 h-8 text-white/70" />
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-              <div className="w-full sm:w-auto">
-                <ConnectButton />
-              </div>
-              
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-bg-tertiary/40 border border-border/80 rounded-xl text-sm font-medium text-text-muted hover:text-white hover:bg-bg-tertiary hover:border-border-hover transition-all duration-200 active:scale-[0.98]"
-              >
-                <GithubIcon className="w-4 h-4" />
-                View Source
-              </a>
-            </div>
+            <h1 className="text-[clamp(2.5rem,6vw,4rem)] font-semibold tracking-tight text-white leading-[1.05] mb-5">
+              Credentials without exposure
+            </h1>
 
+            <p className="text-[15px] text-white/35 leading-relaxed max-w-md mb-12">
+              Privacy-preserving credentials on Midnight. Authorities attest your eligibility — you prove it without revealing which credential.
+            </p>
+
+            <Link
+              to="/deploy"
+              className="px-7 py-3 bg-white hover:bg-white/90 text-black text-[14px] font-medium rounded-xl transition-all"
+            >
+              Get Started
+            </Link>
           </div>
         </div>
-      )}
-
-      {isConnected && (
-        <div className="py-12 space-y-8">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-              <span className="text-xs font-medium uppercase tracking-widest text-emerald-400/80">Session Active</span>
+      ) : (
+        <div className="space-y-8 pt-4 pb-12">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-[22px] font-semibold text-white tracking-tight">Credentials</h1>
+              <p className="text-[14px] text-white/30 mt-1">Selective disclosure proofs</p>
             </div>
-            <h2 className="text-2xl font-semibold tracking-tight text-white">Membership Club</h2>
-            <p className="text-text-muted text-[14px] mt-1">Choose an action:</p>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className={`p-2.5 rounded-xl transition-all ${showSettings ? 'bg-white/[0.06] text-white/70' : 'hover:bg-white/[0.04] text-white/30 hover:text-white/50'}`}
+            >
+              <SettingsIcon className="w-[18px] h-[18px]" />
+            </button>
           </div>
 
-          {contractData && (
-            <div className="p-6 bg-gradient-to-br from-bg-tertiary/60 to-bg-secondary border border-border/60 rounded-2xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${contractData.status === 'synced' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                  <span className="text-sm text-white font-mono truncate max-w-[200px]">
-                    {contractData.address?.slice(0, 20)}...
-                  </span>
-                </div>
-                {apiStatus && (
-                  <span className="text-xs text-text-muted">{apiStatus.storedContracts} tracked</span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <StatCard label="Registrations" value={contractData.totalRegistrations || 0} />
-                <StatCard label="Proofs" value={contractData.totalProofs || 0} />
+          {showSettings && (
+            <div className="p-5 bg-white/[0.03] border border-white/[0.06] rounded-2xl space-y-4">
+              <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium">Contract Settings</p>
+              <input
+                type="text"
+                value={newContractAddress}
+                onChange={(e) => setNewContractAddress(e.target.value)}
+                placeholder="0x..."
+                className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white font-mono text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={saveContract}
+                  disabled={!newContractAddress}
+                  className="flex-1 px-4 py-2.5 bg-white hover:bg-white/90 disabled:opacity-20 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={clearContract}
+                  className="px-4 py-2.5 bg-white/[0.04] hover:bg-red-500/[0.08] text-white/40 hover:text-red-400/80 text-[13px] font-medium rounded-xl transition-all border border-white/[0.06] hover:border-red-500/[0.1]"
+                >
+                  Clear
+                </button>
               </div>
             </div>
           )}
 
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-[12px] font-medium uppercase tracking-widest text-text-muted/60 mb-3">Actions</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
-                {/* Deploy */}
-                <Link
-                  to="/deploy"
-                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-                >
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 transition-colors">
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                        <path d="M2 17l10 5 10-5" />
-                        <path d="M2 12l10 5 10-5" />
-                      </svg>
-                    </div>
-                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
-                      Deploy Club
-                    </h3>
-                    <p className="text-[13px] text-text-muted leading-snug">
-                      Deploy new membership contract.
-                    </p>
-                  </div>
-                </Link>
-
-                {/* Join */}
-                <Link
-                  to="/join"
-                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-                >
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 group-hover:bg-purple-500/20 transition-colors">
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                        <polyline points="10 17 15 12 10 7" />
-                        <line x1="15" y1="12" x2="3" y2="12" />
-                      </svg>
-                    </div>
-                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
-                      Join Club
-                    </h3>
-                    <p className="text-[13px] text-text-muted leading-snug">
-                      Connect to existing contract.
-                    </p>
-                  </div>
-                </Link>
-
-                {/* Register */}
-                <Link
-                  to="/register"
-                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-                >
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                      </svg>
-                    </div>
-                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
-                      Register
-                    </h3>
-                    <p className="text-[13px] text-text-muted leading-snug">
-                      Pay fee to join as member.
-                    </p>
-                  </div>
-                </Link>
-
-                {/* Prove */}
-                <Link
-                  to="/prove-eligibility"
-                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-                >
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500/20 transition-colors">
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                        <polyline points="22 4 12 14.01 9 11.01" />
-                      </svg>
-                    </div>
-                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
-                      Prove Eligibility
-                    </h3>
-                    <p className="text-[13px] text-text-muted leading-snug">
-                      Generate ZK proof.
-                    </p>
-                  </div>
-                </Link>
-
+          {/* Stats box */}
+          {stats && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-1">Age Proofs</p>
+                <p className="text-[20px] font-semibold text-white">{stats.totalAgeProofs}</p>
+              </div>
+              <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-1">Residency</p>
+                <p className="text-[20px] font-semibold text-white">{stats.totalResidencyProofs}</p>
+              </div>
+              <div className="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-1">Certification</p>
+                <p className="text-[20px] font-semibold text-white">{stats.totalCertProofs}</p>
               </div>
             </div>
+          )}
 
+          {/* Unified session card — collapsible */}
+          {contractAddress && secretKey && (
+            <SessionCard contractAddress={contractAddress} secretKey={secretKey} />
+          )}
+
+          {/* If contract exists but no key — just show address inline */}
+          {contractAddress && !secretKey && (
+            <div className="px-5 py-3.5 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-1">Contract</p>
+                <p className="text-[13px] font-mono text-white/40 truncate">{contractAddress}</p>
+              </div>
+              <button
+                onClick={() => navigator.clipboard.writeText(contractAddress)}
+                className="shrink-0 p-2 hover:bg-white/[0.06] rounded-lg transition-colors text-white/20 hover:text-white/50"
+              >
+                <CopyIcon className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Action grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {[
+              {
+                to: '/deploy',
+                icon: <ShieldIcon className="w-5 h-5 text-white/60" />,
+                title: 'Deploy',
+                desc: 'Deploy the credentials contract',
+              },
+              {
+                to: '/attest',
+                icon: <KeyIcon className="w-5 h-5 text-white/60" />,
+                title: 'Attest',
+                desc: 'Attest user credentials',
+              },
+              {
+                to: '/prove',
+                icon: <UserIcon className="w-5 h-5 text-white/60" />,
+                title: 'Prove',
+                desc: 'Prove your eligibility',
+              },
+            ].map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="group flex flex-col p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl hover:bg-white/[0.04] hover:border-white/[0.08] transition-all"
+              >
+                <div className="w-10 h-10 rounded-xl bg-white/[0.04] group-hover:bg-white/[0.06] flex items-center justify-center mb-5 transition-colors">
+                  {item.icon}
+                </div>
+                <h3 className="text-[14px] font-medium text-white/80 group-hover:text-white mb-1.5 transition-colors">{item.title}</h3>
+                <p className="text-[13px] text-white/25 group-hover:text-white/35 transition-colors">{item.desc}</p>
+              </Link>
+            ))}
           </div>
         </div>
       )}

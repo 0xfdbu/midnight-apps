@@ -23,7 +23,6 @@ export default defineConfig({
       '@midnight-ntwrk/ledger-v8',
       '@midnight-ntwrk/onchain-runtime-v3',
       '@midnight-ntwrk/compact-runtime',
-      '@midnight-ntwrk/compact-js',
     ],
   },
   build: {

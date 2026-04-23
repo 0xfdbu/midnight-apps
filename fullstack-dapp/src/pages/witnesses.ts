@@ -1,38 +1,48 @@
 import type { WitnessContext } from '@midnight-ntwrk/compact-runtime';
+import type { Ledger } from '../contracts/managed/attest/contract/index.js';
 
-export type MembershipPrivateState = {
+export type AttestPrivateState = {
   readonly secretKey: Uint8Array;
-  readonly privateValue: bigint;
-  readonly tokenColor: Uint8Array;
 };
 
-export const createMembershipPrivateState = (
+export const createAttestPrivateState = (
   secretKey: Uint8Array,
-  privateValue: bigint = 100n,
-  tokenColor: Uint8Array = new Uint8Array(32),
-): MembershipPrivateState => ({
+): AttestPrivateState => ({
   secretKey,
-  privateValue,
-  tokenColor,
 });
 
 export const witnesses = {
   localSecretKey: ({
     privateState,
-  }: WitnessContext<any, MembershipPrivateState>): [MembershipPrivateState, Uint8Array] => [
+  }: WitnessContext<Ledger, AttestPrivateState>): [AttestPrivateState, Uint8Array] => [
     privateState,
     privateState.secretKey,
   ],
-  localPrivateValue: ({
-    privateState,
-  }: WitnessContext<any, MembershipPrivateState>): [MembershipPrivateState, bigint] => [
-    privateState,
-    privateState.privateValue,
-  ],
-  tokenColor: ({
-    privateState,
-  }: WitnessContext<any, MembershipPrivateState>): [MembershipPrivateState, Uint8Array] => [
-    privateState,
-    privateState.tokenColor,
-  ],
+
+  findAgePath: (
+    { privateState, ledger }: WitnessContext<Ledger, AttestPrivateState>,
+    commit: Uint8Array,
+  ) => {
+    const path = ledger.ageCommitments.findPathForLeaf(commit);
+    if (!path) throw new Error('Age commitment not found in tree');
+    return [privateState, path];
+  },
+
+  findResidencyPath: (
+    { privateState, ledger }: WitnessContext<Ledger, AttestPrivateState>,
+    commit: Uint8Array,
+  ) => {
+    const path = ledger.residencyCommitments.findPathForLeaf(commit);
+    if (!path) throw new Error('Residency commitment not found in tree');
+    return [privateState, path];
+  },
+
+  findCertPath: (
+    { privateState, ledger }: WitnessContext<Ledger, AttestPrivateState>,
+    commit: Uint8Array,
+  ) => {
+    const path = ledger.certCommitments.findPathForLeaf(commit);
+    if (!path) throw new Error('Certification commitment not found in tree');
+    return [privateState, path];
+  },
 };

@@ -1,76 +1,133 @@
 pragma language_version 0.22;
 import CompactStandardLibrary;
 
-export sealed ledger admin: ZswapCoinPublicKey;
-export sealed ledger registrationFee: Uint<128>;
+// --- Ledger State ---
 
-export ledger hashedMembers: Set<Bytes<32>>;
+export sealed ledger authority: Bytes<32>;
+
+export ledger ageCommitments: HistoricMerkleTree<10, Bytes<32>>;
+export ledger residencyCommitments: HistoricMerkleTree<10, Bytes<32>>;
+export ledger certCommitments: HistoricMerkleTree<10, Bytes<32>>;
+
 export ledger usedNullifiers: Set<Bytes<32>>;
-export ledger totalRegistrations: Counter;
-export ledger totalProofs: Counter;
+
+export ledger totalAgeProofs: Counter;
+export ledger totalResidencyProofs: Counter;
+export ledger totalCertProofs: Counter;
+
+// --- Witnesses ---
 
 witness localSecretKey(): Bytes<32>;
-witness localPrivateValue(): Uint<32>;
-witness tokenColor(): Bytes<32>;
+witness findAgePath(commit: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
+witness findResidencyPath(commit: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
+witness findCertPath(commit: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
 
-constructor() {
-    admin = ownPublicKey();
-    registrationFee = 1000000;
+// --- Constructor ---
+
+constructor(authoritySk: Bytes<32>) {
+    // authoritySk is a constructor argument (witness data) — disclose required
+    authority = disclose(publicKey(authoritySk));
 }
 
-circuit commitment(sk: Bytes<32>): Bytes<32> {
-    return persistentHash<Vector<2, Bytes<32>>>([pad(32, "mydapp:commit:v1"), sk]);
+// --- Helper circuits (private) ---
+
+circuit publicKey(sk: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<2, Bytes<32>>>(
+        [pad(32, "mydapp:pk:v1"), sk]
+    );
 }
 
-circuit nullifier(sk: Bytes<32>): Bytes<32> {
-    return persistentHash<Vector<2, Bytes<32>>>([pad(32, "mydapp:nullify:v1"), sk]);
+circuit commitment(sk: Bytes<32>, domain: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<3, Bytes<32>>>(
+        [pad(32, "mydapp:commit:v1"), domain, sk]
+    );
 }
 
-// --- User: Join (pays fee) ---
-export circuit register(): [] {
+export circuit getCommitment(sk: Bytes<32>, domain: Bytes<32>): Bytes<32> {
+    return commitment(sk, domain);
+}
+
+circuit nullifier(sk: Bytes<32>, domain: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<3, Bytes<32>>>(
+        [pad(32, "mydapp:nullify:v1"), domain, sk]
+    );
+}
+
+// --- Authority circuits ---
+
+export circuit attestAge(userCommit: Bytes<32>): [] {
     const sk = localSecretKey();
-    const commit = commitment(sk);
+    assert(authority == disclose(publicKey(sk)), "Not the authority");
+    ageCommitments.insert(disclose(userCommit));
+}
+
+export circuit attestResidency(userCommit: Bytes<32>): [] {
+    const sk = localSecretKey();
+    assert(authority == disclose(publicKey(sk)), "Not the authority");
+    residencyCommitments.insert(disclose(userCommit));
+}
+
+export circuit attestCertification(userCommit: Bytes<32>): [] {
+    const sk = localSecretKey();
+    assert(authority == disclose(publicKey(sk)), "Not the authority");
+    certCommitments.insert(disclose(userCommit));
+}
+
+// --- User circuits: selective proof ---
+
+export circuit proveAge(): Boolean {
+    const sk = localSecretKey();
+    const domain = pad(32, "age");
+    const commit = commitment(sk, domain);
+    const path = findAgePath(commit);
 
     assert(
-        !hashedMembers.member(disclose(commit)),
-        "Already registered"
+        ageCommitments.checkRoot(disclose(merkleTreePathRoot<10, Bytes<32>>(path))),
+        "Age not attested"
     );
 
-    receiveUnshielded(disclose(tokenColor()), registrationFee);
-
-    hashedMembers.insert(disclose(commit));
-    totalRegistrations.increment(1);
-}
-
-// --- User: Prove eligibility (one-time per nullifier) ---
-export circuit proveEligibility(): Boolean {
-    const sk = localSecretKey();
-    const commit = commitment(sk);
-
-    assert(
-        hashedMembers.member(disclose(commit)),
-        "Not registered"
-    );
-
-    const nul = nullifier(sk);
-    assert(!usedNullifiers.member(disclose(nul)), "Eligibility already proven");
-
+    const nul = nullifier(sk, domain);
+    assert(!usedNullifiers.member(disclose(nul)), "Age proof already used");
     usedNullifiers.insert(disclose(nul));
-    totalProofs.increment(1);
+    totalAgeProofs.increment(1);
 
-    const privateVal = localPrivateValue();
-    const eligible = privateVal >= 100;
-
-    return disclose(eligible);
+    return disclose(true);
 }
 
-// --- Admin: Withdraw funds ---
-export circuit withdraw(to: UserAddress, amount: Uint<128>): [] {
-    assert(admin == ownPublicKey(), "Not the admin");
+export circuit proveResidency(): Boolean {
+    const sk = localSecretKey();
+    const domain = pad(32, "residency");
+    const commit = commitment(sk, domain);
+    const path = findResidencyPath(commit);
 
-    sendUnshielded(
-        disclose(tokenColor()),
-        disclose(amount),
-        right<ContractAddress, UserAddress>(disclose(to))
+    assert(
+        residencyCommitments.checkRoot(disclose(merkleTreePathRoot<10, Bytes<32>>(path))),
+        "Residency not attested"
     );
+
+    const nul = nullifier(sk, domain);
+    assert(!usedNullifiers.member(disclose(nul)), "Residency proof already used");
+    usedNullifiers.insert(disclose(nul));
+    totalResidencyProofs.increment(1);
+
+    return disclose(true);
+}
+
+export circuit proveCertification(): Boolean {
+    const sk = localSecretKey();
+    const domain = pad(32, "certification");
+    const commit = commitment(sk, domain);
+    const path = findCertPath(commit);
+
+    assert(
+        certCommitments.checkRoot(disclose(merkleTreePathRoot<10, Bytes<32>>(path))),
+        "Certification not attested"
+    );
+
+    const nul = nullifier(sk, domain);
+    assert(!usedNullifiers.member(disclose(nul)), "Certification proof already used");
+    usedNullifiers.insert(disclose(nul));
+    totalCertProofs.increment(1);
+
+    return disclose(true);
 }

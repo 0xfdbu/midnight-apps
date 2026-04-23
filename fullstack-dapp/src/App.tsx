@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { HomePage } from './pages/Home';
-import { DashboardPage } from './pages/Dashboard';
-import { JoinPage } from './pages/Join';
-import { RegisterPage } from './pages/Register';
-import { ProveEligibilityPage } from './pages/ProveEligibility';
 import { DeployPage } from './pages/Deploy';
+import { AttestPage } from './pages/Attest';
+import { ProvePage } from './pages/Prove';
 import { useWalletStore } from './hooks/useWallet';
+import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
+
+setNetworkId('preprod');
 
 const LAST_WALLET_KEY = 'midnight_last_wallet';
 
@@ -44,11 +45,9 @@ function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/join" element={<JoinPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/prove-eligibility" element={<ProveEligibilityPage />} />
           <Route path="/deploy" element={<DeployPage />} />
+          <Route path="/attest" element={<AttestPage />} />
+          <Route path="/prove" element={<ProvePage />} />
         </Routes>
       </Layout>
     </BrowserRouter>
