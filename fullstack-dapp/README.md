@@ -1,12 +1,12 @@
-# Membership Club DApp
+# Attestation Credentials DApp
 
-A Midnight Network membership club DApp with privacy-preserving ZK proofs.
+A Midnight Network credential attestation DApp with privacy-preserving ZK proofs.
 
 ## Features
 
-- **Register**: Join the membership club by paying a fee (1 NIGHT)
-- **Prove Eligibility**: Generate ZK proof to prove membership without revealing identity
-- **Off-chain Analytics**: Tracks registrations and proofs via WebSocket subscription
+- **Authority Attestations**: Authority attests users for age, residency, or certification credentials
+- **Selective Disclosure**: Users prove eligibility without revealing which credential
+- **Off-chain Analytics**: Tracks proof counts via Midnight indexer
 
 ## Tech Stack
 
@@ -19,12 +19,10 @@ A Midnight Network membership club DApp with privacy-preserving ZK proofs.
 
 | Route | Description |
 |-------|-------------|
-| `/` | Home: View analytics (registrations, proofs count) |
-| `/join` | Connect to an existing contract |
-| `/deploy` | Deploy new membership contract |
-| `/register` | Register as a member (pays fee) |
-| `/prove-eligibility` | Generate ZK proof of membership |
-| `/dashboard` | View wallet info and state |
+| `/` | Home: View stats, copy commitment |
+| `/deploy` | Deploy new attestation contract (authority only) |
+| `/attest` | Attest users for credentials (authority only) |
+| `/prove` | Generate ZK proof of eligibility |
 
 ## Setup
 
@@ -35,29 +33,35 @@ npm run dev
 
 ## Contract
 
-Deployed contract tracks:
-- `hashedMembers`: Set of member commitments
+Deployed on preprod: `8249a861a622c88a64a15ba5b9a0c3c9defb98fb93bec806f4ab22376ce4ff7e`
+
+Ledger fields:
+- `authority`: Contract authority (public key)
+- `ageCommitments`: Merkle tree of age attestations
+- `residencyCommitments`: Merkle tree of residency attestations
+- `certCommitments`: Merkle tree of certification attestations
 - `usedNullifiers`: Set of used nullifiers (prevents double-proving)
-- `totalRegistrations`: Counter of total registrations
-- `totalProofs`: Counter of total proofs generated
+- `totalAgeProofs`: Counter of age proofs
+- `totalResidencyProofs`: Counter of residency proofs
+- `totalCertProofs`: Counter of certification proofs
 
 ## Analytics Server
-
-Node.js server (`node-analytics/`) polls Midnight indexer for contract state:
 
 ```bash
 cd node-analytics
 npm install
-npm start
+node server.ts
 ```
 
 API endpoints:
-- `POST /track/:address` - Track a contract
-- `GET /contract/:address` - Get cached state
+- `GET /contract` - Get proof counts (age, residency, cert)
 - `GET /status` - Server status
+
+Hardcoded contract: `8249a861a622c88a64a15ba5b9a0c3c9defb98fb93bec806f4ab22376ce4ff7e`
 
 ## Notes
 
-- Registration fee: 1,000,000 raw units (1 NIGHT)
 - Proof generation requires local proof server on port 6300
-- Private state stored locally via IndexedDB
+- Private state stored locally via levelPrivateStateProvider
+- Authority secret key stored in localStorage (`attest_secret_key`)
+- User commitment computed as `getCommitment(secretKey, domainBytes)` where domain is 'age', 'residency', or 'certification'
