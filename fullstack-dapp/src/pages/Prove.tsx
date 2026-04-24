@@ -11,7 +11,7 @@ import { findDeployedContract, createCircuitCallTxInterface } from '@midnight-nt
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import { toHex, fromHex } from '@midnight-ntwrk/midnight-js-utils';
 import { Transaction } from '@midnight-ntwrk/ledger-v8';
-import { witnesses, createAttestPrivateState } from './witnesses';
+import { witnesses } from './witnesses';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
 
 const ZK_ARTIFACTS_PATH = '/contracts/managed/attest';
@@ -134,7 +134,7 @@ export function ProvePage() {
       return;
     }
 
-    const effectivePassword = storagePassword;
+    const effectivePassword = storagePassword || localStorage.getItem('attest_session_password') || '';
     if (!effectivePassword) {
       setError('Please unlock your session first.');
       return;
@@ -202,6 +202,7 @@ export function ProvePage() {
         accountId,
         privateStoragePasswordProvider: () => effectivePassword,
       });
+      privateStateProvider.setContractAddress(contractAddress);
 
       const providers = {
         privateStateProvider,
