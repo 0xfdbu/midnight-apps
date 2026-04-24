@@ -33,7 +33,7 @@ npm run dev
 
 ## Contract
 
-Deployed on preprod: `fb6adaafd5ad25ade5caacb161ebfd2e9acb3e9add708ddbd23387248ca8e491`
+Deployed on preprod: `cb34591c8c7e7bf99bbf9c0077234472de1d3bdf5f98961686399ec07078b36a`
 
 Ledger fields:
 - `authority`: Contract authority (public key)
@@ -57,7 +57,7 @@ API endpoints:
 - `GET /contract` - Get proof counts (age, residency, cert)
 - `GET /status` - Server status
 
-Hardcoded contract: `fb6adaafd5ad25ade5caacb161ebfd2e9acb3e9add708ddbd23387248ca8e491`
+Hardcoded contract: `cb34591c8c7e7bf99bbf9c0077234472de1d3bdf5f98961686399ec07078b36a`
 
 ## Notes
 

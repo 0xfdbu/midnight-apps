@@ -16,6 +16,34 @@ import * as contractModule from '../contracts/managed/attest/contract/index.js';
 
 const ZK_ARTIFACTS_PATH = '/contracts/managed/attest';
 
+function validatePassword(password: string): string | null {
+  if (password.length < 16) return 'Password must be at least 16 characters';
+  const types = [/[A-Z]/, /[a-z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/];
+  const typeCount = types.filter(t => t.test(password)).length;
+  if (typeCount < 3) return 'Password must use at least 3 of: uppercase, lowercase, digits, special characters';
+  let consecutive = 1;
+  for (let i = 1; i < password.length; i++) {
+    if (password[i] === password[i - 1]) {
+      consecutive++;
+      if (consecutive > 3) return 'Password cannot have more than 3 consecutive identical characters';
+    } else {
+      consecutive = 1;
+    }
+  }
+  const lower = password.toLowerCase();
+  for (let i = 0; i <= lower.length - 4; i++) {
+    let asc = 1, desc = 1;
+    for (let j = 1; j < 4; j++) {
+      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) + 1) asc++;
+      else asc = 1;
+      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) - 1) desc++;
+      else desc = 1;
+    }
+    if (asc >= 4 || desc >= 4) return 'Password cannot have sequential patterns (e.g., 1234, abcd)';
+  }
+  return null;
+}
+
 type ProofType = 'age' | 'residency' | 'certification';
 
 const STEPS = [
@@ -89,6 +117,7 @@ export function ProvePage() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [eligible, setEligible] = useState<boolean | null>(null);
   const [storagePassword, setStoragePassword] = useState('');
+  const [storedPassword, setStoredPassword] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -97,6 +126,7 @@ export function ProvePage() {
   useEffect(() => {
     if (!isConnected) {
       setStoragePassword('');
+      setStoredPassword('');
       setIsUnlocked(false);
       setNeedsStateReset(false);
     }
@@ -105,28 +135,19 @@ export function ProvePage() {
   const currentStep = status ? STEPS.findIndex((s) => status.startsWith(s)) : -1;
 
   const clearContractState = useCallback(() => {
-    // Clear all contract-related data
     localStorage.removeItem('attest_contract');
     localStorage.removeItem('attest_private_state');
     localStorage.removeItem('attest_session_password');
     
-    // Delete IndexedDB databases created by levelPrivateStateProvider
-    if (addresses?.shieldedCoinPublicKey) {
-      const dbNames = [
-        `midnight-private-state-${addresses.shieldedCoinPublicKey}`,
-        `midnight-contract-state-${addresses.shieldedCoinPublicKey}`,
-      ];
-      dbNames.forEach(name => {
-        indexedDB.deleteDatabase(name);
-      });
-    }
+    indexedDB.deleteDatabase('midnight-level-db');
     
     setNeedsStateReset(false);
     setError(null);
     setIsUnlocked(false);
     setStoragePassword('');
+    setStoredPassword('');
     setPasswordInput('');
-  }, [addresses?.shieldedCoinPublicKey]);
+  }, []);
 
   const handleProve = useCallback(async () => {
     if (!connectedApi || !addresses) {
@@ -134,7 +155,7 @@ export function ProvePage() {
       return;
     }
 
-    const effectivePassword = storagePassword || localStorage.getItem('attest_session_password') || '';
+    const effectivePassword = storagePassword || storedPassword || localStorage.getItem('attest_session_password') || '';
     if (!effectivePassword) {
       setError('Please unlock your session first.');
       return;
@@ -247,13 +268,17 @@ export function ProvePage() {
       
       // ✅ FIX: Do NOT pass initialPrivateState here. 
       // The state has already been advanced by the Authority's attestation.
+      // Pass user's secret key so localSecretKey() returns the correct key for commitment
       await findDeployedContract(providers as never, {
         contractAddress,
         compiledContract: finalContract as never,
         privateStateId,
+        initialPrivateState: { secretKey: skData ? fromHex(skData.hex) : new Uint8Array(32) },
       });
 
       setStatus('Generating proof...');
+      console.log('[DEBUG] Proof type:', proofType);
+      console.log('[DEBUG] Contract address:', contractAddress);
       const txInterface = createCircuitCallTxInterface(
         providers as never,
         finalContract as never,
@@ -262,6 +287,7 @@ export function ProvePage() {
       );
 
       let result;
+      console.log('[DEBUG] Searching for commitment in tree...');
       switch (proofType) {
         case 'residency':
           result = await (txInterface as any).proveResidency();
@@ -278,6 +304,7 @@ export function ProvePage() {
       setStatus(null);
     } catch (err) {
       console.error('Prove error:', err);
+      console.log('[DEBUG] Error details:', err);
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('not attested')) {
         setError('Not attested yet — ask the authority to attest you first.');
@@ -507,8 +534,9 @@ export function ProvePage() {
             value={passwordInput}
             onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(null); }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && passwordInput.length >= 16) {
+              if (e.key === 'Enter' && !validatePassword(passwordInput)) {
                 setStoragePassword(passwordInput);
+                setStoredPassword(passwordInput);
                 setPasswordInput('');
                 setIsUnlocked(true);
                 setPasswordError(null);
@@ -522,16 +550,18 @@ export function ProvePage() {
           )}
           <button
             onClick={() => {
-              if (passwordInput.length < 16) {
-                setPasswordError('Password must be at least 16 characters.');
+              const pwdError = validatePassword(passwordInput);
+              if (pwdError) {
+                setPasswordError(pwdError);
                 return;
               }
               setStoragePassword(passwordInput);
+              setStoredPassword(passwordInput);
               setPasswordInput('');
               setIsUnlocked(true);
               setPasswordError(null);
             }}
-            disabled={passwordInput.length < 16}
+            disabled={!!validatePassword(passwordInput)}
             className="w-full py-3 bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
           >
             Unlock

@@ -16,6 +16,34 @@ function fromHexString(hex: string): Uint8Array {
   return bytes;
 }
 
+function validatePassword(password: string): string | null {
+  if (password.length < 16) return 'Password must be at least 16 characters';
+  const types = [/[A-Z]/, /[a-z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/];
+  const typeCount = types.filter(t => t.test(password)).length;
+  if (typeCount < 3) return 'Password must use at least 3 of: uppercase, lowercase, digits, special characters';
+  let consecutive = 1;
+  for (let i = 1; i < password.length; i++) {
+    if (password[i] === password[i - 1]) {
+      consecutive++;
+      if (consecutive > 3) return 'Password cannot have more than 3 consecutive identical characters';
+    } else {
+      consecutive = 1;
+    }
+  }
+  const lower = password.toLowerCase();
+  for (let i = 0; i <= lower.length - 4; i++) {
+    let asc = 1, desc = 1;
+    for (let j = 1; j < 4; j++) {
+      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) + 1) asc++;
+      else asc = 1;
+      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) - 1) desc++;
+      else desc = 1;
+    }
+    if (asc >= 4 || desc >= 4) return 'Password cannot have sequential patterns (e.g., 1234, abcd)';
+  }
+  return null;
+}
+
 function domainToBytes(domain: string): Uint8Array {
   const bytes = new Uint8Array(32);
   const encoded = new TextEncoder().encode(domain);
@@ -87,7 +115,10 @@ function SessionCard({
         secretKey,
         domainToBytes(domain)
       );
-      setCommitHex(toHexString(commitment));
+      const hex = toHexString(commitment);
+      setCommitHex(hex);
+      console.log(`[DEBUG] Commitment for ${domain}:`, hex);
+      console.log(`[DEBUG] domainToBytes("${domain}"):`, Array.from(domainToBytes(domain)).map(b => b.toString(16).padStart(2, '0')).join(''));
       setError(null);
     } catch (e) {
       setError('Commitment circuit not exported — add `export` to the circuit in Contract.compact');
@@ -225,8 +256,9 @@ export function HomePage() {
 
   const handleUnlock = async () => {
     if (!contractAddress || !addresses?.shieldedCoinPublicKey) return;
-    if (passwordInput.length < 16) {
-      setPasswordError('Password must be at least 16 characters');
+    const pwdError = validatePassword(passwordInput);
+    if (pwdError) {
+      setPasswordError(pwdError);
       return;
     }
 
@@ -243,7 +275,13 @@ export function HomePage() {
       let skData: { hex: string } | undefined;
       try {
         skData = await provider.get('attest_sk') as { hex: string } | undefined;
-      } catch {
+      } catch (e: any) {
+        const msg = e?.message?.toLowerCase() || '';
+        if (msg.includes('unsupported state') || msg.includes('unable to authenticate') || msg.includes('decrypt')) {
+          setPasswordError('Wrong password. Please use the same password you used before.');
+          setIsUnlocking(false);
+          return;
+        }
         skData = undefined;
       }
 
@@ -256,7 +294,6 @@ export function HomePage() {
 
       const bytes = fromHexString(skData.hex);
       setSecretKey(bytes);
-      localStorage.setItem('attest_session_password', passwordInput);
       setPasswordInput('');
     } catch (e: any) {
       console.error('Unlock error:', e);

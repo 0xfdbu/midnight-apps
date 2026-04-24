@@ -10,7 +10,7 @@ const PORT = 3001;
 const INDEXER_HTTP = 'https://indexer.preprod.midnight.network/api/v4/graphql';
 const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
 const DATABASE_URL = 'postgresql://neondb_owner:npg_PkV4bSulxJs5@ep-holy-feather-an0zodck-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
-const TRACKED_CONTRACT = 'fb6adaafd5ad25ade5caacb161ebfd2e9acb3e9add708ddbd23387248ca8e491';
+const TRACKED_CONTRACT = 'cb34591c8c7e7bf99bbf9c0077234472de1d3bdf5f98961686399ec07078b36a';
 
 app.use(cors());
 app.use(express.json());

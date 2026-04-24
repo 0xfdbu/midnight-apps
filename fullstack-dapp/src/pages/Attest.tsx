@@ -15,7 +15,34 @@ import { witnesses, createAttestPrivateState } from './witnesses';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
 
 const ZK_ARTIFACTS_PATH = '/contracts/managed/attest';
-const PRIVATE_STATE_PASSWORD = 'AttestApp2026!Pass';
+
+function validatePassword(password: string): string | null {
+  if (password.length < 16) return 'Password must be at least 16 characters';
+  const types = [/[A-Z]/, /[a-z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/];
+  const typeCount = types.filter(t => t.test(password)).length;
+  if (typeCount < 3) return 'Password must use at least 3 of: uppercase, lowercase, digits, special characters';
+  let consecutive = 1;
+  for (let i = 1; i < password.length; i++) {
+    if (password[i] === password[i - 1]) {
+      consecutive++;
+      if (consecutive > 3) return 'Password cannot have more than 3 consecutive identical characters';
+    } else {
+      consecutive = 1;
+    }
+  }
+  const lower = password.toLowerCase();
+  for (let i = 0; i <= lower.length - 4; i++) {
+    let asc = 1, desc = 1;
+    for (let j = 1; j < 4; j++) {
+      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) + 1) asc++;
+      else asc = 1;
+      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) - 1) desc++;
+      else desc = 1;
+    }
+    if (asc >= 4 || desc >= 4) return 'Password cannot have sequential patterns (e.g., 1234, abcd)';
+  }
+  return null;
+}
 
 interface AttestForm {
   userCommit: string;
@@ -72,12 +99,20 @@ export function AttestPage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<AttestForm>({ userCommit: '', type: 'age' });
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [authorityPassword, setAuthorityPassword] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isUnlocked, setIsUnlocked] = useState(false);
 
   const currentStep = status ? STEPS.findIndex((s) => status.startsWith(s)) : -1;
 
   const handleAttest = useCallback(async () => {
     if (!connectedApi) {
       setError('Wallet not connected');
+      return;
+    }
+    if (!isUnlocked) {
+      setError('Please unlock with your authority password first.');
       return;
     }
     if (!form.userCommit) {
@@ -103,6 +138,8 @@ export function AttestPage() {
       for (let i = 0; i < 32; i++) {
         commitBytes[i] = parseInt(commitHex.slice(i * 2, i * 2 + 2), 16) || 0;
       }
+      console.log('[DEBUG] Attesting commitment:', commitHex);
+      console.log('[DEBUG] commitBytes:', Array.from(commitBytes).map(b => b.toString(16).padStart(2, '0')).join(''));
 
       setStatus('Getting wallet keys...');
       const shieldedAddresses = await connectedApi.getShieldedAddresses();
@@ -115,7 +152,7 @@ export function AttestPage() {
 
       const privateStateProvider = levelPrivateStateProvider({
         accountId: shieldedAddresses.shieldedCoinPublicKey,
-        privateStoragePasswordProvider: () => PRIVATE_STATE_PASSWORD,
+        privateStoragePasswordProvider: () => authorityPassword,
       });
 
       const providers = {
@@ -166,6 +203,9 @@ export function AttestPage() {
       const authoritySk = fromHex(storedSkHex);
 
       setStatus('Finding deployment...');
+      try {
+        await privateStateProvider.clearSigningKeys();
+      } catch {}
       await findDeployedContract(providers as never, {
         contractAddress,
         compiledContract: finalContract as never,
@@ -362,7 +402,59 @@ export function AttestPage() {
 
       {/* Idle state — form */}
       {!txHash && !attesting && !error && (
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
+        <>
+          {!isUnlocked ? (
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 space-y-4">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[14px] font-medium text-white/70">Authority Unlock</p>
+                  <p className="text-[12px] text-white/30 mt-0.5">Enter your authority password to attest credentials</p>
+                </div>
+              </div>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !validatePassword(passwordInput)) {
+                    setAuthorityPassword(passwordInput);
+                    setPasswordInput('');
+                    setIsUnlocked(true);
+                    setPasswordError(null);
+                  }
+                }}
+                placeholder="Authority password (min. 16 characters)"
+                className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15 mb-3"
+              />
+              {passwordError && (
+                <p className="text-[12px] text-red-400/70 mb-3">{passwordError}</p>
+              )}
+              <button
+                onClick={() => {
+                  const pwdError = validatePassword(passwordInput);
+                  if (pwdError) {
+                    setPasswordError(pwdError);
+                    return;
+                  }
+                  setAuthorityPassword(passwordInput);
+                  setPasswordInput('');
+                  setIsUnlocked(true);
+                  setPasswordError(null);
+                }}
+                disabled={!!validatePassword(passwordInput)}
+                className="w-full py-3 bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
+              >
+                Unlock
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
           <div className="px-6 py-5 border-b border-white/[0.04] flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center">
               <KeyIcon className="w-4 h-4 text-white/40" />
@@ -414,6 +506,8 @@ export function AttestPage() {
             </Button>
           </div>
         </div>
+          )}
+        </>
       )}
     </div>
   );

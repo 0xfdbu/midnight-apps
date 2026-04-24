@@ -23,6 +23,7 @@ export const witnesses = {
     { privateState, ledger }: WitnessContext<Ledger, AttestPrivateState>,
     commit: Uint8Array,
   ) => {
+     console.log('[DEBUG] findAgePath searching for:', Array.from(commit).map(b => b.toString(16).padStart(2,'0')).join(''));
     const path = ledger.ageCommitments.findPathForLeaf(commit);
     if (!path) throw new Error('Age commitment not found in tree');
     return [privateState, path];
