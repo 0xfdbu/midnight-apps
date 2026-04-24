@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
+import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
 
 function toHexString(bytes: Uint8Array): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -212,20 +213,69 @@ function SessionCard({
 }
 
 export function HomePage() {
-  const { isConnected } = useWalletStore();
+  const { isConnected, addresses } = useWalletStore();
   const [contractAddress, setContractAddress] = useState<string | null>(null);
   const [secretKey, setSecretKey] = useState<Uint8Array | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [newContractAddress, setNewContractAddress] = useState('');
   const [stats, setStats] = useState<{totalAgeProofs: number; totalResidencyProofs: number; totalCertProofs: number} | null>(null);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+
+  const handleUnlock = async () => {
+    if (!contractAddress || !addresses?.shieldedCoinPublicKey) return;
+    if (passwordInput.length < 16) {
+      setPasswordError('Password must be at least 16 characters');
+      return;
+    }
+
+    setPasswordError(null);
+    setIsUnlocking(true);
+
+    try {
+      const provider = levelPrivateStateProvider({
+        privateStoragePasswordProvider: () => passwordInput,
+        accountId: addresses.shieldedCoinPublicKey,
+      });
+      provider.setContractAddress(contractAddress);
+
+      let skData: { hex: string } | undefined;
+      try {
+        skData = await provider.get('attest_sk') as { hex: string } | undefined;
+      } catch {
+        skData = undefined;
+      }
+
+      if (!skData) {
+        const randomBytes = crypto.getRandomValues(new Uint8Array(32));
+        const hex = Array.from(randomBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+        await provider.set('attest_sk', { hex });
+        skData = { hex };
+      }
+
+      const bytes = fromHexString(skData.hex);
+      setSecretKey(bytes);
+      localStorage.setItem('attest_session_password', passwordInput);
+      setPasswordInput('');
+    } catch (e: any) {
+      console.error('Unlock error:', e);
+      setPasswordError(e?.message || 'Incorrect password or storage error. Try again.');
+    } finally {
+      setIsUnlocking(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isConnected) {
+      setSecretKey(null);
+      setPasswordInput('');
+    }
+  }, [isConnected]);
 
   useEffect(() => {
     const addr = localStorage.getItem('attest_contract');
-    const sk = localStorage.getItem('attest_secret_key');
     setContractAddress(addr);
-    if (sk) {
-      setSecretKey(fromHexString(sk));
-    }
     if (addr) {
       fetch('http://localhost:3001/contract')
         .then(r => r.json())
@@ -355,19 +405,42 @@ export function HomePage() {
             <SessionCard contractAddress={contractAddress} secretKey={secretKey} />
           )}
 
-          {/* If contract exists but no key — just show address inline */}
+          {/* If contract exists but no key — show password unlock */}
           {contractAddress && !secretKey && (
-            <div className="px-5 py-3.5 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-1">Contract</p>
-                <p className="text-[13px] font-mono text-white/40 truncate">{contractAddress}</p>
+            <div className="p-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[14px] font-medium text-white/70">Unlock Your Commitment Key</p>
+                  <p className="text-[12px] text-white/30 mt-0.5">Enter your password to generate your commitment</p>
+                </div>
               </div>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(null); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+                placeholder="Storage password (min. 16 characters)"
+                className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15 mb-3"
+              />
+              {passwordError && (
+                <p className="text-[12px] text-red-400/70 mb-3">{passwordError}</p>
+              )}
               <button
-                onClick={() => navigator.clipboard.writeText(contractAddress)}
-                className="shrink-0 p-2 hover:bg-white/[0.06] rounded-lg transition-colors text-white/20 hover:text-white/50"
+                onClick={handleUnlock}
+                disabled={passwordInput.length < 16 || isUnlocking}
+                className="w-full py-3 bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
               >
-                <CopyIcon className="w-4 h-4" />
+                {isUnlocking ? 'Unlocking...' : 'Unlock & Generate Commitment'}
               </button>
+              <p className="text-[11px] text-white/20 mt-3 text-center">
+                First time? A new key will be created using this password.
+              </p>
             </div>
           )}
 

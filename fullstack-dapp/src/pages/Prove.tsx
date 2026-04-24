@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { Button } from '../components/ui/Button';
@@ -15,13 +15,13 @@ import { witnesses, createAttestPrivateState } from './witnesses';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
 
 const ZK_ARTIFACTS_PATH = '/contracts/managed/attest';
-const PRIVATE_STATE_PASSWORD = 'AttestApp2026!Pass';
 
 type ProofType = 'age' | 'residency' | 'certification';
 
 const STEPS = [
   'Loading',
   'Getting wallet keys',
+  'Verifying password',
   'Setting up providers',
   'Building contract',
   'Finding contract',
@@ -70,20 +70,73 @@ function ShieldCheckIcon({ className }: { className?: string }) {
   );
 }
 
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </svg>
+  );
+}
+
 export function ProvePage() {
-  const { isConnected, connectedApi } = useWalletStore();
+  const { isConnected, connectedApi, addresses } = useWalletStore();
   const [proving, setProving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [proofType, setProofType] = useState<ProofType>('age');
   const [txHash, setTxHash] = useState<string | null>(null);
   const [eligible, setEligible] = useState<boolean | null>(null);
+  const [storagePassword, setStoragePassword] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [needsStateReset, setNeedsStateReset] = useState(false);
+
+  useEffect(() => {
+    if (!isConnected) {
+      setStoragePassword('');
+      setIsUnlocked(false);
+      setNeedsStateReset(false);
+    }
+  }, [isConnected]);
 
   const currentStep = status ? STEPS.findIndex((s) => status.startsWith(s)) : -1;
 
+  const clearContractState = useCallback(() => {
+    // Clear all contract-related data
+    localStorage.removeItem('attest_contract');
+    localStorage.removeItem('attest_private_state');
+    localStorage.removeItem('attest_session_password');
+    
+    // Delete IndexedDB databases created by levelPrivateStateProvider
+    if (addresses?.shieldedCoinPublicKey) {
+      const dbNames = [
+        `midnight-private-state-${addresses.shieldedCoinPublicKey}`,
+        `midnight-contract-state-${addresses.shieldedCoinPublicKey}`,
+      ];
+      dbNames.forEach(name => {
+        indexedDB.deleteDatabase(name);
+      });
+    }
+    
+    setNeedsStateReset(false);
+    setError(null);
+    setIsUnlocked(false);
+    setStoragePassword('');
+    setPasswordInput('');
+  }, [addresses?.shieldedCoinPublicKey]);
+
   const handleProve = useCallback(async () => {
-    if (!connectedApi) {
+    if (!connectedApi || !addresses) {
       setError('Wallet not connected');
+      return;
+    }
+
+    const effectivePassword = storagePassword;
+    if (!effectivePassword) {
+      setError('Please unlock your session first.');
       return;
     }
 
@@ -92,6 +145,7 @@ export function ProvePage() {
     setStatus('Loading...');
     setEligible(null);
     setTxHash(null);
+    setNeedsStateReset(false);
 
     try {
       const contractAddress = localStorage.getItem('attest_contract');
@@ -104,6 +158,40 @@ export function ProvePage() {
       setStatus('Getting wallet keys...');
       const shieldedAddresses = await connectedApi.getShieldedAddresses();
 
+      const accountId = shieldedAddresses.shieldedCoinPublicKey;
+
+      setStatus('Verifying password...');
+      
+      const skProvider = levelPrivateStateProvider({
+        accountId,
+        privateStoragePasswordProvider: () => effectivePassword,
+      });
+      skProvider.setContractAddress(contractAddress);
+
+      let skData: { hex: string } | undefined;
+      try {
+        skData = await skProvider.get('attest_sk') as { hex: string } | undefined;
+      } catch (e) {
+        console.error('Secret key decryption failed:', e);
+        setError(
+          'Unable to decrypt credential data. This usually means:\n\n' +
+          '• Wrong password — make sure you\'re using the same password from the home page\n' +
+          '• Corrupted data — try clearing the contract state and starting fresh'
+        );
+        setNeedsStateReset(true);
+        setProving(false);
+        return;
+      }
+
+      if (!skData) {
+        setError('Secret key not found. Go to the home page and unlock with your password first.');
+        setProving(false);
+        return;
+      }
+
+      // NOTE: We verify skData above to ensure the password is correct, 
+      // but we do NOT need to use the secret key to override the contract state.
+
       setStatus('Setting up providers...');
       const zkConfig = new FetchZkConfigProvider(
         window.location.origin + ZK_ARTIFACTS_PATH,
@@ -111,8 +199,8 @@ export function ProvePage() {
       );
 
       const privateStateProvider = levelPrivateStateProvider({
-        accountId: shieldedAddresses.shieldedCoinPublicKey,
-        privateStoragePasswordProvider: () => PRIVATE_STATE_PASSWORD,
+        accountId,
+        privateStoragePasswordProvider: () => effectivePassword,
       });
 
       const providers = {
@@ -152,22 +240,16 @@ export function ProvePage() {
         ZK_ARTIFACTS_PATH
       );
 
-      const privateStateId = localStorage.getItem('attest_private_state') || 'attestState';
-
-      const storedSkHex = localStorage.getItem('attest_secret_key');
-      if (!storedSkHex) {
-        setError('Secret key not found. Re-register or request attestation.');
-        setProving(false);
-        return;
-      }
-      const userSk = fromHex(storedSkHex);
+      const privateStateId = 'attestState';
 
       setStatus('Finding contract...');
+      
+      // ✅ FIX: Do NOT pass initialPrivateState here. 
+      // The state has already been advanced by the Authority's attestation.
       await findDeployedContract(providers as never, {
         contractAddress,
         compiledContract: finalContract as never,
         privateStateId,
-        initialPrivateState: createAttestPrivateState(userSk),
       });
 
       setStatus('Generating proof...');
@@ -200,6 +282,9 @@ export function ProvePage() {
         setError('Not attested yet — ask the authority to attest you first.');
       } else if (msg.includes('already used')) {
         setError('Proof already used — each credential can only be proven once.');
+      } else if (msg.includes('Unsupported state') || msg.includes('authenticate')) {
+        setError('Unable to decrypt data. Clear contract state and try again.');
+        setNeedsStateReset(true);
       } else {
         setError(msg);
       }
@@ -207,7 +292,7 @@ export function ProvePage() {
     } finally {
       setProving(false);
     }
-  }, [connectedApi, proofType]);
+  }, [connectedApi, addresses, proofType, storagePassword]);
 
   const copyTx = () => {
     if (!txHash) return;
@@ -356,28 +441,108 @@ export function ProvePage() {
 
           <div className="border-t border-white/[0.04] pt-4">
             <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-2">Error</p>
-            <p className="text-[13px] text-white/35 leading-relaxed">{error}</p>
+            <p className="text-[13px] text-white/35 leading-relaxed whitespace-pre-line">{error}</p>
           </div>
 
           <div className="flex gap-2">
-            <button
-              onClick={handleProve}
-              className="flex-1 px-4 py-2.5 bg-white hover:bg-white/90 text-black text-[13px] font-medium rounded-xl transition-all"
-            >
-              Retry
-            </button>
+            {!needsStateReset && (
+              <>
+                <button
+                  onClick={() => { setError(null); setIsUnlocked(false); setStoragePassword(''); }}
+                  className="flex-1 px-4 py-2.5 bg-white/[0.04] hover:bg-white/[0.06] text-white/50 hover:text-white/70 text-[13px] font-medium rounded-xl transition-all border border-white/[0.06]"
+                >
+                  Try Different Password
+                </button>
+                <button
+                  onClick={handleProve}
+                  className="flex-1 px-4 py-2.5 bg-white hover:bg-white/90 text-black text-[13px] font-medium rounded-xl transition-all"
+                >
+                  Retry
+                </button>
+              </>
+            )}
             <Link
               to="/attest"
-              className="flex-1 px-4 py-2.5 bg-white/[0.04] hover:bg-white/[0.06] text-white/50 hover:text-white/70 text-[13px] font-medium rounded-xl transition-all text-center border border-white/[0.06]"
+              className={!needsStateReset ? 'flex-1 px-4 py-2.5 bg-white/[0.04] hover:bg-white/[0.06] text-white/50 hover:text-white/70 text-[13px] font-medium rounded-xl transition-all text-center border border-white/[0.06]' : 'flex-1'}
             >
-              Get Attested
+              {!needsStateReset && 'Get Attested'}
             </Link>
           </div>
+
+          {needsStateReset && (
+            <div className="border-t border-white/[0.04] pt-4 space-y-3">
+              <p className="text-[12px] text-white/25">
+                This will clear all contract data. You'll need to redeploy the contract and get attested again.
+              </p>
+              <button
+                onClick={clearContractState}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/[0.08] hover:bg-red-500/[0.12] border border-red-500/[0.1] hover:border-red-500/[0.15] text-red-400/80 hover:text-red-400 text-[13px] font-medium rounded-xl transition-all"
+              >
+                <TrashIcon className="w-4 h-4" />
+                Clear Contract State & Start Fresh
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Password unlock UI */}
+      {!isUnlocked && !proving && !eligible && !error && (
+        <div className="p-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
+              <svg className="w-5 h-5 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[14px] font-medium text-white/70">Unlock Your Session</p>
+              <p className="text-[12px] text-white/30 mt-0.5">Enter your storage password to access your credential key</p>
+            </div>
+          </div>
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(null); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && passwordInput.length >= 16) {
+                setStoragePassword(passwordInput);
+                setPasswordInput('');
+                setIsUnlocked(true);
+                setPasswordError(null);
+              }
+            }}
+            placeholder="Storage password (min. 16 characters)"
+            className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15 mb-3"
+          />
+          {passwordError && (
+            <p className="text-[12px] text-red-400/70 mb-3">{passwordError}</p>
+          )}
+          <button
+            onClick={() => {
+              if (passwordInput.length < 16) {
+                setPasswordError('Password must be at least 16 characters.');
+                return;
+              }
+              setStoragePassword(passwordInput);
+              setPasswordInput('');
+              setIsUnlocked(true);
+              setPasswordError(null);
+            }}
+            disabled={passwordInput.length < 16}
+            className="w-full py-3 bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
+          >
+            Unlock
+          </button>
+          <p className="text-[11px] text-white/20 mt-3 text-center">
+            Use the same password you used on the home page.
+          </p>
         </div>
       )}
 
       {/* Idle state — type selector + action */}
-      {!eligible && !proving && !error && (
+      {!eligible && !proving && !error && isUnlocked && (
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
           <div className="px-6 py-5 border-b border-white/[0.04] flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center">
