@@ -13,36 +13,9 @@ import { toHex, fromHex } from '@midnight-ntwrk/midnight-js-utils';
 import { Transaction } from '@midnight-ntwrk/ledger-v8';
 import { witnesses, createAttestPrivateState } from './witnesses';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
+import { deriveKey, deriveKeyFromPassword } from '../lib/utils';
 
 const ZK_ARTIFACTS_PATH = '/contracts/managed/attest';
-
-function validatePassword(password: string): string | null {
-  if (password.length < 16) return 'Password must be at least 16 characters';
-  const types = [/[A-Z]/, /[a-z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/];
-  const typeCount = types.filter(t => t.test(password)).length;
-  if (typeCount < 3) return 'Password must use at least 3 of: uppercase, lowercase, digits, special characters';
-  let consecutive = 1;
-  for (let i = 1; i < password.length; i++) {
-    if (password[i] === password[i - 1]) {
-      consecutive++;
-      if (consecutive > 3) return 'Password cannot have more than 3 consecutive identical characters';
-    } else {
-      consecutive = 1;
-    }
-  }
-  const lower = password.toLowerCase();
-  for (let i = 0; i <= lower.length - 4; i++) {
-    let asc = 1, desc = 1;
-    for (let j = 1; j < 4; j++) {
-      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) + 1) asc++;
-      else asc = 1;
-      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) - 1) desc++;
-      else desc = 1;
-    }
-    if (asc >= 4 || desc >= 4) return 'Password cannot have sequential patterns (e.g., 1234, abcd)';
-  }
-  return null;
-}
 
 interface AttestForm {
   userCommit: string;
@@ -93,16 +66,12 @@ function CopyIcon({ className }: { className?: string }) {
 }
 
 export function AttestPage() {
-  const { isConnected, connectedApi } = useWalletStore();
+  const { isConnected, connectedApi, userPassword } = useWalletStore();
   const [attesting, setAttesting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<AttestForm>({ userCommit: '', type: 'age' });
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [authorityPassword, setAuthorityPassword] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [isUnlocked, setIsUnlocked] = useState(false);
 
   const currentStep = status ? STEPS.findIndex((s) => status.startsWith(s)) : -1;
 
@@ -111,8 +80,8 @@ export function AttestPage() {
       setError('Wallet not connected');
       return;
     }
-    if (!isUnlocked) {
-      setError('Please unlock with your authority password first.');
+    if (!userPassword) {
+      setError('Please unlock on the home page first.');
       return;
     }
     if (!form.userCommit) {
@@ -152,7 +121,7 @@ export function AttestPage() {
 
       const privateStateProvider = levelPrivateStateProvider({
         accountId: shieldedAddresses.shieldedCoinPublicKey,
-        privateStoragePasswordProvider: () => authorityPassword,
+        privateStoragePasswordProvider: () => userPassword,
       });
 
       const providers = {
@@ -184,6 +153,10 @@ export function AttestPage() {
         },
       };
 
+      setStatus('Deriving authority key...');
+      const masterKey = await deriveKeyFromPassword(userPassword, shieldedAddresses.shieldedCoinPublicKey);
+      const authoritySk = await deriveKey(masterKey, 'attest:authority');
+
       setStatus('Building contract...');
       const cc = CompiledContract.make('attest', contractModule.Contract);
       const ccWithWitnesses = CompiledContract.withWitnesses(cc, witnesses as any);
@@ -193,14 +166,6 @@ export function AttestPage() {
       );
 
       const privateStateId = localStorage.getItem('attest_private_state') || 'attestState';
-
-      const storedSkHex = localStorage.getItem('attest_secret_key');
-      if (!storedSkHex) {
-        setError('Authority secret key not found. Re-deploy the contract.');
-        setAttesting(false);
-        return;
-      }
-      const authoritySk = fromHex(storedSkHex);
 
       setStatus('Finding deployment...');
       try {
@@ -242,7 +207,7 @@ export function AttestPage() {
     } finally {
       setAttesting(false);
     }
-  }, [connectedApi, form]);
+  }, [connectedApi, form, userPassword]);
 
   const copyTx = () => {
     if (!txHash) return;
@@ -403,9 +368,9 @@ export function AttestPage() {
       {/* Idle state — form */}
       {!txHash && !attesting && !error && (
         <>
-          {!isUnlocked ? (
-            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 space-y-4">
-              <div className="flex items-center gap-4 mb-4">
+          {!userPassword ? (
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6">
+              <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
                   <svg className="w-5 h-5 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -413,45 +378,12 @@ export function AttestPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-[14px] font-medium text-white/70">Authority Unlock</p>
-                  <p className="text-[12px] text-white/30 mt-0.5">Enter your authority password to attest credentials</p>
+                  <p className="text-[14px] font-medium text-white/70">Session Locked</p>
+                  <p className="text-[12px] text-white/30 mt-0.5">
+                    Go to the <Link to="/" className="text-white/50 hover:text-white/70 underline">Home page</Link> to unlock before attesting.
+                  </p>
                 </div>
               </div>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(null); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !validatePassword(passwordInput)) {
-                    setAuthorityPassword(passwordInput);
-                    setPasswordInput('');
-                    setIsUnlocked(true);
-                    setPasswordError(null);
-                  }
-                }}
-                placeholder="Authority password (min. 16 characters)"
-                className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15 mb-3"
-              />
-              {passwordError && (
-                <p className="text-[12px] text-red-400/70 mb-3">{passwordError}</p>
-              )}
-              <button
-                onClick={() => {
-                  const pwdError = validatePassword(passwordInput);
-                  if (pwdError) {
-                    setPasswordError(pwdError);
-                    return;
-                  }
-                  setAuthorityPassword(passwordInput);
-                  setPasswordInput('');
-                  setIsUnlocked(true);
-                  setPasswordError(null);
-                }}
-                disabled={!!validatePassword(passwordInput)}
-                className="w-full py-3 bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
-              >
-                Unlock
-              </button>
             </div>
           ) : (
             <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">

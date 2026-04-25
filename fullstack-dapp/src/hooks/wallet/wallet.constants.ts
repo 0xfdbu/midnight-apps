@@ -7,3 +7,4 @@ export const PROOF_SERVER = 'http://localhost:6300';
 export const PRIVATE_STATE_STORE = 'membership';
 export const PRIVATE_STATE_ID = 'membershipState';
 export const PRIVATE_STATE_PASSWORD = 'MembershipApp2026!';
+export const SESSION_CONTRACT_ADDRESS = '0000000000000000000000000000000000000000000000000000000000000000';

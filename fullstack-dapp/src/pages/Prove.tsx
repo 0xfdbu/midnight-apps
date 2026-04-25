@@ -10,39 +10,13 @@ import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-pri
 import { findDeployedContract, createCircuitCallTxInterface } from '@midnight-ntwrk/midnight-js-contracts';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import { toHex, fromHex } from '@midnight-ntwrk/midnight-js-utils';
+import { deriveKey, deriveKeyFromPassword } from '../lib/utils';
 import { Transaction } from '@midnight-ntwrk/ledger-v8';
 import { witnesses } from './witnesses';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
 
 const ZK_ARTIFACTS_PATH = '/contracts/managed/attest';
 
-function validatePassword(password: string): string | null {
-  if (password.length < 16) return 'Password must be at least 16 characters';
-  const types = [/[A-Z]/, /[a-z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/];
-  const typeCount = types.filter(t => t.test(password)).length;
-  if (typeCount < 3) return 'Password must use at least 3 of: uppercase, lowercase, digits, special characters';
-  let consecutive = 1;
-  for (let i = 1; i < password.length; i++) {
-    if (password[i] === password[i - 1]) {
-      consecutive++;
-      if (consecutive > 3) return 'Password cannot have more than 3 consecutive identical characters';
-    } else {
-      consecutive = 1;
-    }
-  }
-  const lower = password.toLowerCase();
-  for (let i = 0; i <= lower.length - 4; i++) {
-    let asc = 1, desc = 1;
-    for (let j = 1; j < 4; j++) {
-      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) + 1) asc++;
-      else asc = 1;
-      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) - 1) desc++;
-      else desc = 1;
-    }
-    if (asc >= 4 || desc >= 4) return 'Password cannot have sequential patterns (e.g., 1234, abcd)';
-  }
-  return null;
-}
 
 type ProofType = 'age' | 'residency' | 'certification';
 
@@ -109,25 +83,17 @@ function TrashIcon({ className }: { className?: string }) {
 }
 
 export function ProvePage() {
-  const { isConnected, connectedApi, addresses } = useWalletStore();
+  const { isConnected, connectedApi, addresses, userPassword } = useWalletStore();
   const [proving, setProving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [proofType, setProofType] = useState<ProofType>('age');
   const [txHash, setTxHash] = useState<string | null>(null);
   const [eligible, setEligible] = useState<boolean | null>(null);
-  const [storagePassword, setStoragePassword] = useState('');
-  const [storedPassword, setStoredPassword] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [isUnlocked, setIsUnlocked] = useState(false);
   const [needsStateReset, setNeedsStateReset] = useState(false);
 
   useEffect(() => {
     if (!isConnected) {
-      setStoragePassword('');
-      setStoredPassword('');
-      setIsUnlocked(false);
       setNeedsStateReset(false);
     }
   }, [isConnected]);
@@ -138,15 +104,12 @@ export function ProvePage() {
     localStorage.removeItem('attest_contract');
     localStorage.removeItem('attest_private_state');
     localStorage.removeItem('attest_session_password');
-    
+    localStorage.removeItem('attest_user_password');
+
     indexedDB.deleteDatabase('midnight-level-db');
-    
+
     setNeedsStateReset(false);
     setError(null);
-    setIsUnlocked(false);
-    setStoragePassword('');
-    setStoredPassword('');
-    setPasswordInput('');
   }, []);
 
   const handleProve = useCallback(async () => {
@@ -155,9 +118,8 @@ export function ProvePage() {
       return;
     }
 
-    const effectivePassword = storagePassword || storedPassword || localStorage.getItem('attest_session_password') || '';
-    if (!effectivePassword) {
-      setError('Please unlock your session first.');
+    if (!userPassword) {
+      setError('Please unlock your session on the home page first.');
       return;
     }
 
@@ -181,37 +143,10 @@ export function ProvePage() {
 
       const accountId = shieldedAddresses.shieldedCoinPublicKey;
 
-      setStatus('Verifying password...');
-      
-      const skProvider = levelPrivateStateProvider({
-        accountId,
-        privateStoragePasswordProvider: () => effectivePassword,
-      });
-      skProvider.setContractAddress(contractAddress);
-
-      let skData: { hex: string } | undefined;
-      try {
-        skData = await skProvider.get('attest_sk') as { hex: string } | undefined;
-      } catch (e) {
-        console.error('Secret key decryption failed:', e);
-        setError(
-          'Unable to decrypt credential data. This usually means:\n\n' +
-          '• Wrong password — make sure you\'re using the same password from the home page\n' +
-          '• Corrupted data — try clearing the contract state and starting fresh'
-        );
-        setNeedsStateReset(true);
-        setProving(false);
-        return;
-      }
-
-      if (!skData) {
-        setError('Secret key not found. Go to the home page and unlock with your password first.');
-        setProving(false);
-        return;
-      }
-
-      // NOTE: We verify skData above to ensure the password is correct, 
-      // but we do NOT need to use the secret key to override the contract state.
+      setStatus('Deriving identity...');
+      // Derive attest_sk deterministically from password + wallet-specific salt
+      const masterKey = await deriveKeyFromPassword(userPassword, accountId);
+      const attestSk = await deriveKey(masterKey, 'attest:user');
 
       setStatus('Setting up providers...');
       const zkConfig = new FetchZkConfigProvider(
@@ -221,7 +156,7 @@ export function ProvePage() {
 
       const privateStateProvider = levelPrivateStateProvider({
         accountId,
-        privateStoragePasswordProvider: () => effectivePassword,
+        privateStoragePasswordProvider: () => userPassword,
       });
       privateStateProvider.setContractAddress(contractAddress);
 
@@ -262,18 +197,18 @@ export function ProvePage() {
         ZK_ARTIFACTS_PATH
       );
 
-      const privateStateId = 'attestState';
+      const privateStateId = 'attestProverState';
 
       setStatus('Finding contract...');
-      
-      // ✅ FIX: Do NOT pass initialPrivateState here. 
-      // The state has already been advanced by the Authority's attestation.
-      // Pass user's secret key so localSecretKey() returns the correct key for commitment
+
+      // Use a fresh privateStateId so we don't collide with the Authority's
+      // stored state (which was encrypted with their password and contains
+      // the authority's secret key, not the prover's).
       await findDeployedContract(providers as never, {
         contractAddress,
         compiledContract: finalContract as never,
         privateStateId,
-        initialPrivateState: { secretKey: skData ? fromHex(skData.hex) : new Uint8Array(32) },
+        initialPrivateState: { secretKey: attestSk },
       });
 
       setStatus('Generating proof...');
@@ -320,7 +255,7 @@ export function ProvePage() {
     } finally {
       setProving(false);
     }
-  }, [connectedApi, addresses, proofType, storagePassword]);
+  }, [connectedApi, addresses, proofType, userPassword]);
 
   const copyTx = () => {
     if (!txHash) return;
@@ -476,10 +411,10 @@ export function ProvePage() {
             {!needsStateReset && (
               <>
                 <button
-                  onClick={() => { setError(null); setIsUnlocked(false); setStoragePassword(''); }}
+                  onClick={() => { setError(null); }}
                   className="flex-1 px-4 py-2.5 bg-white/[0.04] hover:bg-white/[0.06] text-white/50 hover:text-white/70 text-[13px] font-medium rounded-xl transition-all border border-white/[0.06]"
                 >
-                  Try Different Password
+                  Dismiss
                 </button>
                 <button
                   onClick={handleProve}
@@ -514,10 +449,10 @@ export function ProvePage() {
         </div>
       )}
 
-      {/* Password unlock UI */}
-      {!isUnlocked && !proving && !eligible && !error && (
+      {/* Go to Home to unlock */}
+      {!userPassword && !proving && !eligible && !error && (
         <div className="p-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
               <svg className="w-5 h-5 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -525,55 +460,17 @@ export function ProvePage() {
               </svg>
             </div>
             <div>
-              <p className="text-[14px] font-medium text-white/70">Unlock Your Session</p>
-              <p className="text-[12px] text-white/30 mt-0.5">Enter your storage password to access your credential key</p>
+              <p className="text-[14px] font-medium text-white/70">Session Locked</p>
+              <p className="text-[12px] text-white/30 mt-0.5">
+                Go to the <Link to="/" className="text-white/50 hover:text-white/70 underline">Home page</Link> to unlock your session.
+              </p>
             </div>
           </div>
-          <input
-            type="password"
-            value={passwordInput}
-            onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(null); }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !validatePassword(passwordInput)) {
-                setStoragePassword(passwordInput);
-                setStoredPassword(passwordInput);
-                setPasswordInput('');
-                setIsUnlocked(true);
-                setPasswordError(null);
-              }
-            }}
-            placeholder="Storage password (min. 16 characters)"
-            className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15 mb-3"
-          />
-          {passwordError && (
-            <p className="text-[12px] text-red-400/70 mb-3">{passwordError}</p>
-          )}
-          <button
-            onClick={() => {
-              const pwdError = validatePassword(passwordInput);
-              if (pwdError) {
-                setPasswordError(pwdError);
-                return;
-              }
-              setStoragePassword(passwordInput);
-              setStoredPassword(passwordInput);
-              setPasswordInput('');
-              setIsUnlocked(true);
-              setPasswordError(null);
-            }}
-            disabled={!!validatePassword(passwordInput)}
-            className="w-full py-3 bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
-          >
-            Unlock
-          </button>
-          <p className="text-[11px] text-white/20 mt-3 text-center">
-            Use the same password you used on the home page.
-          </p>
         </div>
       )}
 
       {/* Idle state — type selector + action */}
-      {!eligible && !proving && !error && isUnlocked && (
+      {!eligible && !proving && !error && userPassword && (
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden">
           <div className="px-6 py-5 border-b border-white/[0.04] flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-white/[0.04] flex items-center justify-center">

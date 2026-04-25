@@ -2,46 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
-import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
+import { deriveKey, deriveKeyFromPassword, generateRandomPassword, validatePassword } from '../lib/utils';
 
 function toHexString(bytes: Uint8Array): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function fromHexString(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-function validatePassword(password: string): string | null {
-  if (password.length < 16) return 'Password must be at least 16 characters';
-  const types = [/[A-Z]/, /[a-z]/, /[0-9]/, /[!@#$%^&*(),.?":{}|<>]/];
-  const typeCount = types.filter(t => t.test(password)).length;
-  if (typeCount < 3) return 'Password must use at least 3 of: uppercase, lowercase, digits, special characters';
-  let consecutive = 1;
-  for (let i = 1; i < password.length; i++) {
-    if (password[i] === password[i - 1]) {
-      consecutive++;
-      if (consecutive > 3) return 'Password cannot have more than 3 consecutive identical characters';
-    } else {
-      consecutive = 1;
-    }
-  }
-  const lower = password.toLowerCase();
-  for (let i = 0; i <= lower.length - 4; i++) {
-    let asc = 1, desc = 1;
-    for (let j = 1; j < 4; j++) {
-      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) + 1) asc++;
-      else asc = 1;
-      if (lower.charCodeAt(i + j) === lower.charCodeAt(i + j - 1) - 1) desc++;
-      else desc = 1;
-    }
-    if (asc >= 4 || desc >= 4) return 'Password cannot have sequential patterns (e.g., 1234, abcd)';
-  }
-  return null;
 }
 
 function domainToBytes(domain: string): Uint8Array {
@@ -244,71 +208,89 @@ function SessionCard({
 }
 
 export function HomePage() {
-  const { isConnected, addresses } = useWalletStore();
+  const { isConnected, addresses, userPassword, setUserPassword, clearSession } = useWalletStore();
   const [contractAddress, setContractAddress] = useState<string | null>(null);
   const [secretKey, setSecretKey] = useState<Uint8Array | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [newContractAddress, setNewContractAddress] = useState('');
   const [stats, setStats] = useState<{totalAgeProofs: number; totalResidencyProofs: number; totalCertProofs: number} | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [isDeriving, setIsDeriving] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
 
-  const handleUnlock = async () => {
-    if (!contractAddress || !addresses?.shieldedCoinPublicKey) return;
-    const pwdError = validatePassword(passwordInput);
-    if (pwdError) {
-      setPasswordError(pwdError);
-      return;
-    }
-
-    setPasswordError(null);
-    setIsUnlocking(true);
+  const deriveIdentity = async (password: string): Promise<boolean> => {
+    setKeyError(null);
+    setIsDeriving(true);
 
     try {
-      const provider = levelPrivateStateProvider({
-        privateStoragePasswordProvider: () => passwordInput,
-        accountId: addresses.shieldedCoinPublicKey,
-      });
-      provider.setContractAddress(contractAddress);
-
-      let skData: { hex: string } | undefined;
-      try {
-        skData = await provider.get('attest_sk') as { hex: string } | undefined;
-      } catch (e: any) {
-        const msg = e?.message?.toLowerCase() || '';
-        if (msg.includes('unsupported state') || msg.includes('unable to authenticate') || msg.includes('decrypt')) {
-          setPasswordError('Wrong password. Please use the same password you used before.');
-          setIsUnlocking(false);
-          return;
-        }
-        skData = undefined;
+      const validation = validatePassword(password);
+      if (validation) {
+        setKeyError(validation);
+        return false;
       }
 
-      if (!skData) {
-        const randomBytes = crypto.getRandomValues(new Uint8Array(32));
-        const hex = Array.from(randomBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-        await provider.set('attest_sk', { hex });
-        skData = { hex };
+      if (!addresses?.shieldedCoinPublicKey) {
+        setKeyError('Wallet not connected or address unavailable.');
+        return false;
       }
 
-      const bytes = fromHexString(skData.hex);
-      setSecretKey(bytes);
-      setPasswordInput('');
+      // Derive master key from password + wallet-specific salt (shieldedCoinPublicKey)
+      const masterKey = await deriveKeyFromPassword(password, addresses.shieldedCoinPublicKey);
+      const sk = await deriveKey(masterKey, 'attest:user');
+      setSecretKey(sk);
+      return true;
     } catch (e: any) {
-      console.error('Unlock error:', e);
-      setPasswordError(e?.message || 'Incorrect password or storage error. Try again.');
+      console.error('Derive error:', e);
+      setKeyError(e?.message || 'Failed to derive identity.');
+      return false;
     } finally {
-      setIsUnlocking(false);
+      setIsDeriving(false);
     }
+  };
+
+  const handleUnlock = async () => {
+    const ok = await deriveIdentity(passwordInput);
+    if (ok) {
+      setUserPassword(passwordInput);
+      setPasswordInput('');
+      setGeneratedPassword(null);
+    }
+  };
+
+  const handleGenerate = async () => {
+    const pwd = generateRandomPassword();
+    setGeneratedPassword(pwd);
+    setKeyError(null);
+
+    const ok = await deriveIdentity(pwd);
+    if (ok) {
+      setUserPassword(pwd);
+      setPasswordInput('');
+    }
+  };
+
+  const copyGeneratedPassword = () => {
+    if (!generatedPassword) return;
+    navigator.clipboard.writeText(generatedPassword);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 1500);
   };
 
   useEffect(() => {
     if (!isConnected) {
       setSecretKey(null);
       setPasswordInput('');
+      setGeneratedPassword(null);
     }
   }, [isConnected]);
+
+  useEffect(() => {
+    if (!userPassword || secretKey) return;
+    if (!addresses?.shieldedCoinPublicKey) return;
+    deriveIdentity(userPassword);
+  }, [userPassword, addresses?.shieldedCoinPublicKey]);
 
   useEffect(() => {
     const addr = localStorage.getItem('attest_contract');
@@ -339,6 +321,7 @@ export function HomePage() {
     localStorage.removeItem('attest_contract');
     localStorage.removeItem('attest_private_state');
     localStorage.removeItem('attest_secret_key');
+    clearSession();
     setContractAddress(null);
     setSecretKey(null);
     setShowSettings(false);
@@ -376,6 +359,57 @@ export function HomePage() {
             </Link>
           </div>
         </div>
+      ) : !userPassword ? (
+        <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
+          <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-6">
+            <svg className="w-7 h-7 text-white/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <h2 className="text-[22px] font-semibold text-white tracking-tight mb-2">Unlock Dashboard</h2>
+          <p className="text-[14px] text-white/25 mb-8 max-w-sm">
+            Enter your password to recover your identity. Your wallet and password together deterministically derive your secret key.
+          </p>
+          <div className="w-full max-w-sm space-y-3">
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => { setPasswordInput(e.target.value); setKeyError(null); }}
+              onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+              placeholder="Enter your password"
+              className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15"
+            />
+            {keyError && (
+              <p className="text-[12px] text-red-400/70">{keyError}</p>
+            )}
+            <button
+              onClick={handleUnlock}
+              disabled={!passwordInput.trim() || isDeriving}
+              className="w-full py-3 bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
+            >
+              {isDeriving ? 'Deriving...' : 'Unlock'}
+            </button>
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-white/[0.06]" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="px-3 text-[11px] text-white/15 bg-[#0a0a0a]">or</span>
+              </div>
+            </div>
+            <button
+              onClick={handleGenerate}
+              disabled={isDeriving}
+              className="w-full py-3 bg-white/[0.04] hover:bg-white/[0.06] border border-white/[0.08] text-white/60 hover:text-white/80 text-[13px] font-medium rounded-xl transition-all"
+            >
+              Generate Random Password
+            </button>
+            <p className="text-[11px] text-red-400/40 text-center">
+              Warning: There is no recovery. If you lose your password or wallet, your identity is permanently lost. Save your password securely.
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="space-y-8 pt-4 pb-12">
           <div className="flex items-start justify-between">
@@ -391,9 +425,32 @@ export function HomePage() {
             </button>
           </div>
 
+          {generatedPassword && (
+            <div className="p-5 bg-amber-500/[0.03] border border-amber-500/[0.1] rounded-2xl space-y-3">
+              <p className="text-[10px] uppercase tracking-[0.1em] text-amber-400/40 font-medium">Save Your Password</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 px-4 py-3 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                  <p className="text-[12px] font-mono text-white/45 break-all leading-relaxed">{generatedPassword}</p>
+                </div>
+                <button
+                  onClick={copyGeneratedPassword}
+                  className="px-4 py-3 bg-white/[0.06] hover:bg-white/[0.1] rounded-xl transition-colors text-white/40 hover:text-white/60 shrink-0"
+                >
+                  {copiedKey ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-[11px] text-amber-400/40">
+                This password was just generated. Save it somewhere secure. Combined with your wallet, it deterministically recovers your identity.
+              </p>
+            </div>
+          )}
+
           {showSettings && (
             <div className="p-5 bg-white/[0.03] border border-white/[0.06] rounded-2xl space-y-4">
               <p className="text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium">Contract Settings</p>
+              <p className="text-[11px] text-red-400/40">
+                Clear will remove your contract, session, and secret keys. This action cannot be undone.
+              </p>
               <input
                 type="text"
                 value={newContractAddress}
@@ -439,45 +496,26 @@ export function HomePage() {
 
           {/* Unified session card — collapsible */}
           {contractAddress && secretKey && (
-            <SessionCard contractAddress={contractAddress} secretKey={secretKey} />
+            <>
+              <SessionCard contractAddress={contractAddress} secretKey={secretKey} />
+              <div className="flex justify-end">
+                <button
+                  onClick={() => { clearSession(); setSecretKey(null); }}
+                  className="text-[12px] text-white/20 hover:text-white/40 transition-colors"
+                >
+                  Lock session
+                </button>
+              </div>
+            </>
           )}
 
-          {/* If contract exists but no key — show password unlock */}
-          {contractAddress && !secretKey && (
+          {/* Auto-unlock in progress */}
+          {contractAddress && !secretKey && isDeriving && (
             <div className="p-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-[14px] font-medium text-white/70">Unlock Your Commitment Key</p>
-                  <p className="text-[12px] text-white/30 mt-0.5">Enter your password to generate your commitment</p>
-                </div>
+              <div className="flex items-center gap-4">
+                <div className="w-5 h-5 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
+                <p className="text-[14px] text-white/50">Unlocking session...</p>
               </div>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(null); }}
-                onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-                placeholder="Storage password (min. 16 characters)"
-                className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15 mb-3"
-              />
-              {passwordError && (
-                <p className="text-[12px] text-red-400/70 mb-3">{passwordError}</p>
-              )}
-              <button
-                onClick={handleUnlock}
-                disabled={passwordInput.length < 16 || isUnlocking}
-                className="w-full py-3 bg-white hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed text-black text-[13px] font-medium rounded-xl transition-all"
-              >
-                {isUnlocking ? 'Unlocking...' : 'Unlock & Generate Commitment'}
-              </button>
-              <p className="text-[11px] text-white/20 mt-3 text-center">
-                First time? A new key will be created using this password.
-              </p>
             </div>
           )}
 

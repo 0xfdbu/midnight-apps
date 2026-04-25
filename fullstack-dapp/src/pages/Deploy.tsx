@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { Button } from '../components/ui/Button';
@@ -12,13 +12,13 @@ import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
 import { Transaction } from '@midnight-ntwrk/ledger-v8';
 import { toHex, fromHex } from '@midnight-ntwrk/midnight-js-utils';
+import { deriveKey, deriveKeyFromPassword } from '../lib/utils';
 import { witnesses, createAttestPrivateState } from './witnesses';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
 
 setNetworkId('preprod');
 
 const ZK_ARTIFACTS_PATH = '/contracts/managed/attest';
-const PRIVATE_STATE_PASSWORD = 'AttestApp2026!Pass';
 
 const STEPS = [
   'Loading contract',
@@ -56,11 +56,18 @@ function CheckIcon({ className }: { className?: string }) {
 }
 
 export function DeployPage() {
-  const { isConnected, connectedApi } = useWalletStore();
+  const { isConnected, connectedApi, userPassword } = useWalletStore();
   const [deploying, setDeploying] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [contractAddress, setContractAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    const addr = localStorage.getItem('attest_contract');
+    if (addr) {
+      setContractAddress(addr);
+    }
+  }, []);
 
   const currentStep = status ? STEPS.findIndex((s) => status.startsWith(s)) : -1;
 
@@ -69,17 +76,23 @@ export function DeployPage() {
       setError('Wallet not connected');
       return;
     }
+    if (!userPassword) {
+      setError('Please unlock on the home page first.');
+      return;
+    }
 
     setDeploying(true);
     setError(null);
     setStatus('Loading contract...');
 
     try {
-      const authoritySk = crypto.getRandomValues(new Uint8Array(32));
-      const initialPrivateState = createAttestPrivateState(authoritySk);
-
       setStatus('Getting wallet keys...');
       const shieldedAddresses = await connectedApi.getShieldedAddresses();
+
+      setStatus('Deriving authority key...');
+      const masterKey = await deriveKeyFromPassword(userPassword, shieldedAddresses.shieldedCoinPublicKey);
+      const authoritySk = await deriveKey(masterKey, 'attest:authority');
+      const initialPrivateState = createAttestPrivateState(authoritySk);
 
       setStatus('Setting up providers...');
       const zkConfig = new FetchZkConfigProvider(
@@ -88,7 +101,7 @@ export function DeployPage() {
       );
       const privateState = levelPrivateStateProvider({
         accountId: shieldedAddresses.shieldedCoinPublicKey,
-        privateStoragePasswordProvider: () => PRIVATE_STATE_PASSWORD,
+        privateStoragePasswordProvider: () => userPassword,
       });
 
       setStatus('Getting proof provider...');
@@ -141,7 +154,6 @@ export function DeployPage() {
       const address = deployed.deployTxData.public.contractAddress;
       localStorage.setItem('attest_contract', address);
       localStorage.setItem('attest_private_state', 'attestState');
-      localStorage.setItem('attest_secret_key', toHex(authoritySk));
 
       setContractAddress(address);
       setStatus(null);
@@ -152,7 +164,7 @@ export function DeployPage() {
     } finally {
       setDeploying(false);
     }
-  }, [connectedApi]);
+  }, [connectedApi, userPassword]);
 
   const copyAddress = () => {
     if (!contractAddress) return;
@@ -237,6 +249,12 @@ export function DeployPage() {
               Go to Prove
             </Link>
           </div>
+          <button
+            onClick={handleDeploy}
+            className="w-full py-2.5 text-[12px] text-white/20 hover:text-white/40 transition-colors"
+          >
+            Redeploy New Contract
+          </button>
         </div>
       )}
 
@@ -310,32 +328,53 @@ export function DeployPage() {
         </div>
       )}
 
-      {/* Idle state — deploy button */}
+      {/* Idle state — locked or ready to deploy */}
       {!contractAddress && !deploying && !error && (
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 space-y-5">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0 mt-0.5">
-              <svg className="w-5 h-5 text-white/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
+        <>
+          {!userPassword ? (
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-[14px] font-medium text-white/70">Session Locked</p>
+                  <p className="text-[12px] text-white/30 mt-0.5">
+                    Go to the <Link to="/" className="text-white/50 hover:text-white/70 underline">Home page</Link> to unlock before deploying.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-1">
-              <p className="text-[14px] font-medium text-white/70">Ready to deploy</p>
-              <p className="text-[13px] text-white/25 leading-relaxed">
-                This will create a new credentials contract and store the authority secret key in your browser's local storage.
-              </p>
-            </div>
-          </div>
+          ) : (
+            <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 space-y-5">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0 mt-0.5">
+                  <svg className="w-5 h-5 text-white/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[14px] font-medium text-white/70">Ready to deploy</p>
+                  <p className="text-[13px] text-white/25 leading-relaxed">
+                    This will create a new credentials contract and store the authority secret key in your browser's local storage.
+                  </p>
+                </div>
+              </div>
 
-          <div className="border-t border-white/[0.04] pt-4">
-            <Button
-              onClick={handleDeploy}
-              className="px-6 py-2.5 bg-white hover:bg-white/90 text-black text-[13px] font-medium rounded-xl transition-all"
-            >
-              Deploy Contract
-            </Button>
-          </div>
-        </div>
+              <div className="border-t border-white/[0.04] pt-4">
+                <Button
+                  onClick={handleDeploy}
+                  className="px-6 py-2.5 bg-white hover:bg-white/90 text-black text-[13px] font-medium rounded-xl transition-all"
+                >
+                  Deploy Contract
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

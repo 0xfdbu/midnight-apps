@@ -21,6 +21,7 @@ export interface WalletState {
   loadWalletState: () => Promise<void>;
   isSubmitting: boolean;
   makeTransfer: (outputs: any[]) => Promise<void>;
+  userPassword: string | null;
   setWallet: (wallet: InitialAPI | null) => void;
   setConnectedApi: (api: ConnectedAPI | null) => void;
   setIsConnecting: (connecting: boolean) => void;
@@ -29,6 +30,8 @@ export interface WalletState {
   setBalances: (balances: WalletBalances) => void;
   setConfig: (config: WalletConfiguration) => void;
   setShowAccountModal: (show: boolean) => void;
+  setUserPassword: (pwd: string | null) => void;
+  clearSession: () => void;
   connect: (networkId: string) => Promise<void>;
   disconnect: () => void;
 }
@@ -45,6 +48,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   showAccountModal: false,
   isLoadingState: false,
   isSubmitting: false,
+  userPassword: null,
 
   setWallet: (wallet) => set({ wallet }),
   setConnectedApi: (connectedApi) => set({ connectedApi, isConnected: !!connectedApi }),
@@ -54,6 +58,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   setBalances: (balances) => set({ balances }),
   setConfig: (config) => set({ config }),
   setShowAccountModal: (showAccountModal) => set({ showAccountModal }),
+  setUserPassword: (pwd) => {
+    set({ userPassword: pwd });
+  },
+  clearSession: () => {
+    localStorage.removeItem('attest_authority_password');
+    set({ userPassword: null });
+  },
 
   loadWalletState: async () => {
     const { connectedApi } = get();
@@ -160,6 +171,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       balances: null,
       config: null,
       showAccountModal: false,
+      userPassword: null,
     });
   },
 }));
