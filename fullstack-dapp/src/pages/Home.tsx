@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import * as contractModule from '../contracts/managed/attest/contract/index.js';
 import { deriveKey, deriveKeyFromPassword, generateRandomPassword, validatePassword } from '../lib/utils';
+import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
+import { INDEXER_HTTP, INDEXER_WS } from '../hooks/wallet/wallet.constants';
+import { CompactTypeVector, CompactTypeBytes, persistentHash } from '@midnight-ntwrk/compact-runtime';
 
 function toHexString(bytes: Uint8Array): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -214,6 +217,8 @@ export function HomePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [newContractAddress, setNewContractAddress] = useState('');
   const [stats, setStats] = useState<{totalAgeProofs: number; totalResidencyProofs: number; totalCertProofs: number} | null>(null);
+  const [isAuthority, setIsAuthority] = useState<boolean | null>(null);
+  const [authorityLoading, setAuthorityLoading] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [keyError, setKeyError] = useState<string | null>(null);
   const [isDeriving, setIsDeriving] = useState(false);
@@ -302,6 +307,49 @@ export function HomePage() {
         .catch(() => setStats(null));
     }
   }, []);
+
+  useEffect(() => {
+    if (!contractAddress || !secretKey || !addresses?.shieldedCoinPublicKey || !userPassword) {
+      setIsAuthority(null);
+      return;
+    }
+
+    let cancelled = false;
+    setAuthorityLoading(true);
+
+    (async () => {
+      try {
+        const masterKey = await deriveKeyFromPassword(userPassword, addresses.shieldedCoinPublicKey);
+        const authoritySk = await deriveKey(masterKey, 'attest:authority');
+
+        // Compute publicKey(authoritySk) using the same hash as the contract
+        const enc = new TextEncoder();
+        const pad = new Uint8Array(32);
+        pad.set(enc.encode('mydapp:pk:v1'));
+        const descriptor = new CompactTypeVector(2, new CompactTypeBytes(32));
+        const authorityPublicKey = persistentHash(descriptor, [pad, authoritySk]);
+
+        const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
+        const state = await provider.queryContractState(contractAddress);
+        if (!state || cancelled) return;
+
+        const ledger = contractModule.ledger(state.data);
+        const onChainAuthority = ledger.authority;
+
+        const match = onChainAuthority.length === authorityPublicKey.length &&
+          onChainAuthority.every((b: number, i: number) => b === authorityPublicKey[i]);
+
+        if (!cancelled) setIsAuthority(match);
+      } catch (e) {
+        console.error('Authority check failed:', e);
+        if (!cancelled) setIsAuthority(null);
+      } finally {
+        if (!cancelled) setAuthorityLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [contractAddress, secretKey, addresses?.shieldedCoinPublicKey, userPassword]);
 
   const saveContract = async () => {
     if (newContractAddress) {
@@ -424,6 +472,27 @@ export function HomePage() {
               <SettingsIcon className="w-[18px] h-[18px]" />
             </button>
           </div>
+
+          {contractAddress && (
+            <div className="flex items-center gap-2">
+              {authorityLoading ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.02] border border-white/[0.04] rounded-lg">
+                  <div className="w-3 h-3 border border-white/20 border-t-white/60 rounded-full animate-spin" />
+                  <p className="text-[11px] text-white/20">Checking authority...</p>
+                </div>
+              ) : isAuthority === true ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/[0.06] border border-emerald-500/[0.1] rounded-lg">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/60" />
+                  <p className="text-[11px] text-emerald-400/70">You are the authority</p>
+                </div>
+              ) : isAuthority === false ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.02] border border-white/[0.04] rounded-lg">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                  <p className="text-[11px] text-white/25">Not the authority</p>
+                </div>
+              ) : null}
+            </div>
+          )}
 
           {generatedPassword && (
             <div className="p-5 bg-amber-500/[0.03] border border-amber-500/[0.1] rounded-2xl space-y-3">
