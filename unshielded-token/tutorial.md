@@ -1,10 +1,10 @@
-Building an unshielded token DApp with a working frontend.
+This is a full guide on how to build an unshielded token DApp with a working frontend.
 
 📁 **Full Source Code:** [midnight-apps/unshielded-token](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
 
 **Target audience:** Developers
 
-Keep it simple and use React + Vite + TypeScript as it is compatible with most Midnight packages. The first thing you do is set up a basic wallet connection, and for this make sure to use the latest version of the [DApp connector API](https://docs.midnight.network/api-reference/dapp-connector)
+Keep it simple and use React + Vite + TypeScript, as it is compatible with most Midnight packages. The first thing you do is set up a basic wallet connection, and for this, make sure to use the latest version of the [DApp connector API](https://docs.midnight.network/api-reference/dapp-connector)
 
 ## Prerequisites
 
@@ -15,13 +15,13 @@ Keep it simple and use React + Vite + TypeScript as it is compatible with most M
 
 ![Wallet connection UI](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/iej2avrvzu0wic5jpmvq.png)
 
-For a detailed walkthrough on setting up a wallet connection with support for multiple wallets, see this [Full-Stack Dapp wallet connection guide](https://dev.to/0xfdbu/tutorial-building-a-full-stack-midnight-dapp-zero-knowledge-attestation-protocol-with-selective-an1). For reference, the official Midnight [React wallet connection guide](https://docs.midnight.network/guides/react-wallet-connect) is also available. Check [useWallet.ts](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/hooks/useWallet.ts) to see how edge cases are handled.
+For a detailed walkthrough on setting up a wallet connection with support for multiple wallets, see this [full-stack DApp wallet connection guide](https://dev.to/0xfdbu/tutorial-building-a-full-stack-midnight-dapp-zero-knowledge-attestation-protocol-with-selective-an1). For reference, the official Midnight [React wallet connection guide](https://docs.midnight.network/guides/react-wallet-connect) is also available. Check [useWallet.ts](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/hooks/useWallet.ts) to see how edge cases are handled.
 
-With the frontend ready to connect, the next step is the smart contract side. Here are three core circuits that handle the native mint for the unshielded token vault lifecycle.
+With the frontend ready to connect, the next step is the smart contract side. Here are three core circuits that handle the native mint for the unshielded token vault lifecycle:
 
 **Natively minting a stablecoin into the vault with `mintUnshieldedToken`**
 
-Use a padded string for the domain to define the token standard in this case `"stablecoin:usd"`
+Use a padded string for the domain to define the token standard — in this case, `"stablecoin:usd"`
 
 ```typescript
 export circuit mintToContract(amount: Uint<64>): Bytes<32> {
@@ -36,11 +36,11 @@ export circuit mintToContract(amount: Uint<64>): Bytes<32> {
 }
 ```
 
-> **Note:** You have to cast amount `Uint<64>` when updating totalSupply
+> **Note:** You have to cast `amount` to `Uint<64>` when updating `totalSupply`
 
 **Transferring with `sendUnshielded` from vault**
 
-To move tokens, `sendToUser` requires you to reconstruct the `color` using the same domain and smart contract's address (`kernel.self()`)
+To move tokens, `sendToUser` requires you to reconstruct the `color` using the same domain and the smart contract's address (`kernel.self()`)
 
 ```typescript
 export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
@@ -56,7 +56,7 @@ export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
 
 **Depositing into vault with `receiveUnshielded`**
 
-For `receiveTokens` circuit you need to be careful with bit sizes unlike the mint function `receiveUnshielded` strictly requires a `Uint<128>` for amount
+For the `receiveTokens` circuit, you need to be careful with bit sizes. Unlike the mint function, `receiveUnshielded` strictly requires a `Uint<128>` for the amount
 
 ```typescript
 export circuit receiveTokens(amount: Uint<128>): [] {
@@ -87,9 +87,9 @@ Then compile
 compact compile contracts/Contract.compact contracts/managed/stablecoin
 ```
 
-> **Note:** Skip this step if you want to clone the [repo](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable for the frontend. A smart contract is already deployed on Preprod: `db5d7cb3ed5ab23217abedb86831f6f5b23a9179e91e48dab88d819ef41b8e6d`
+> **Note:** Skip this step if you want to clone the [repo](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable by the frontend. A smart contract is already deployed on Preprod: `db5d7cb3ed5ab23217abedb86831f6f5b23a9179e91e48dab88d819ef41b8e6d`
 
-If you do decide to recompile and redeploy run:
+If you do decide to recompile and redeploy, run:
 
 ```shell
 MNEMONIC="24 secret seed phrase from Lace or 1AM" npx tsx scripts/go.ts
@@ -101,7 +101,7 @@ MNEMONIC="24 secret seed phrase from Lace or 1AM" npx tsx scripts/go.ts
 
 Now that the smart contract is deployed on Preprod, the next step is to integrate it with the frontend. The features to cover are shown in the screenshot below:
 
-1. Smart contract operations: mint tokens into vault, send tokens from vault to an address, deposit tokens into the vault.
+1. Smart contract operations: mint tokens into the vault, send tokens from the vault to an address, and deposit tokens into the vault.
 2. Statistics: total supply, smart contract (vault) balance, wallet balance.
 3. User wallet: basic operations such as transferring from your own wallet to another wallet and displaying your receiving address and balance.
 
@@ -111,20 +111,20 @@ Now that the smart contract is deployed on Preprod, the next step is to integrat
 
 ## 1. Smart contract operations
 
-You need to make sure that smart contract providers are fully set up
+You need to make sure the smart contract providers are fully set up
 
-- `privateStateProvider` has `levelPrivateStateProvider` for persistent localstorage
-- `publicDataProvider` used for on-chain read state on the indexer
-- `zkConfigProvider` loads `FetchZkConfigProvider` — compiled verifiers...
-- `proofProvider` responsible for generating zero-knowledge proofs on your proof server
-- `walletProvider` handles `balanceTx` via `connectedApi.balanceUnsealedTransaction`
-- `midnightProvider` submits transactions via `connectedApi.submitTransaction`
+- `privateStateProvider`: uses `levelPrivateStateProvider` for persistent localStorage
+- `publicDataProvider`: reads on-chain state from the indexer
+- `zkConfigProvider`: loads `FetchZkConfigProvider` — compiled verifiers...
+- `proofProvider`: generates zero-knowledge proofs on your proof server
+- `walletProvider`: handles `balanceTx` via `connectedApi.balanceUnsealedTransaction`
+- `midnightProvider`: submits transactions via `connectedApi.submitTransaction`
 
-> **Note:** In this tutorial the providers are rebuilt in every function. In a production environment, initialize them once and reuse them across all operations.
+> **Note:** In this tutorial, the providers are rebuilt in every function. In a production environment, initialize them once and reuse them across all operations.
 
 The function below covers the full lifecycle of minting into the vault smart contract. You can call `await mintToContract(BigInt(amount))` in the UI to execute it.
 
-
+It runs through four stages inside a `try/catch`:
 
 ```typescript
 export async function mintToContract(
@@ -136,73 +136,7 @@ export async function mintToContract(
   onError: (err: string) => void
 ): Promise<void> {
   try {
-    console.log('[Mint] === Starting mintToContract ===');
-    console.log('[Mint] Amount:', amount.toString());
-    console.log('[Mint] Contract:', CONTRACT_ADDRESS);
-
-    const mods = await getModules();
-    const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, proofModule } = mods;
-
-    const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
-    const levelPrivateStateProvider = levelModule.levelPrivateStateProvider;
-    const zkConfigProvider = new FetchZkConfigProvider(window.location.origin + CONTRACT_PATH, fetch.bind(window));
-    const proofProvider = proofModule.httpClientProofProvider(PROOF_SERVER, zkConfigProvider);
-
-    const providers: any = {
-      privateStateProvider: levelPrivateStateProvider({
-        midnightDbName: 'midnight-stablecoin-db',
-        privateStateStoreName: STORE_NAME,
-        accountId: coinPublicKey,
-        privateStoragePasswordProvider: () => STORAGE_PASSWORD,
-      }),
-      publicDataProvider: indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS),
-      zkConfigProvider,
-      proofProvider,
-      walletProvider: {
-        getCoinPublicKey: () => coinPublicKey,
-        getEncryptionPublicKey: () => shieldedAddresses.shieldedEncryptionPublicKey,
-        async balanceTx(tx: any) {
-          const serialized = uint8ArrayToHex(tx.serialize());
-          const result = await connectedApi.balanceUnsealedTransaction(serialized);
-          const bytes = hexToUint8Array(result.tx);
-          return ledger.Transaction.deserialize('signature', 'proof', 'binding', bytes);
-        },
-      },
-      midnightProvider: {
-        submitTx: async (tx: any): Promise<string> => {
-          const serialized = uint8ArrayToHex(tx.serialize());
-          console.log('[Mint] Calling submitTransaction, hex length:', serialized.length);
-          await connectedApi.submitTransaction(serialized);
-          return tx.identifiers()[0];
-        },
-      },
-    };
-
-    const [{ findDeployedContract }] = await Promise.all([
-      import('@midnight-ntwrk/midnight-js-contracts'),
-    ]);
-
-    const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
-    const compiledContract = CompiledContract.make('stablecoin', contractModule.Contract).pipe(
-      CompiledContract.withVacantWitnesses,
-      CompiledContract.withCompiledFileAssets(CONTRACT_PATH)
-    );
-
-    const contract: any = await findDeployedContract(providers, {
-      contractAddress: CONTRACT_ADDRESS,
-      compiledContract,
-      privateStateId: 'stablecoinState',
-      initialPrivateState: {},
-    });
-
-    const currentState = contract?.state?.();
-    console.log('[Mint] Current contract state ledger:', JSON.stringify(currentState?.ledger, null, 2));
-
-    console.log('[Mint] Calling contract.callTx.mintToContract...');
-    const txData = await contract.callTx.mintToContract(amount);
-    console.log('[Mint] SUCCESS, txId:', txData.public.txId);
-    console.log('[Mint] Color returned:', txData.private.result);
-    onSuccess(txData.public.txId);
+    // stages below
   } catch (err) {
     console.error('[Mint] Error:', err);
     onError(err instanceof Error ? err.message : String(err));
@@ -210,21 +144,93 @@ export async function mintToContract(
 }
 ```
 
-When you call
+**1. Load dependencies**
+
+Define `mods` by awaiting `getModules()`, which imports the compiled contract dependencies. These are cached on the first call.
+
+```typescript
+const mods = await getModules();
+const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, proofModule } = mods;
+```
+
+**2. Build providers**
+
+- `privateStateProvider`: uses `levelPrivateStateProvider` for persistent localStorage
+- `publicDataProvider`: reads on-chain state from the indexer
+- `zkConfigProvider`: loads `FetchZkConfigProvider` — compiled verifiers...
+- `proofProvider`: generates zero-knowledge proofs on your proof server
+- `walletProvider`: handles `balanceTx` via `connectedApi.balanceUnsealedTransaction`
+- `midnightProvider`: submits transactions via `connectedApi.submitTransaction`
+
+```typescript
+const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
+const levelPrivateStateProvider = levelModule.levelPrivateStateProvider;
+const zkConfigProvider = new FetchZkConfigProvider(window.location.origin + CONTRACT_PATH, fetch.bind(window));
+const proofProvider = proofModule.httpClientProofProvider(PROOF_SERVER, zkConfigProvider);
+
+const providers: any = {
+  privateStateProvider: levelPrivateStateProvider({
+    midnightDbName: 'midnight-stablecoin-db',
+    privateStateStoreName: STORE_NAME,
+    accountId: coinPublicKey,
+    privateStoragePasswordProvider: () => STORAGE_PASSWORD,
+  }),
+  publicDataProvider: indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS),
+  zkConfigProvider,
+  proofProvider,
+  walletProvider: {
+    getCoinPublicKey: () => coinPublicKey,
+    getEncryptionPublicKey: () => shieldedAddresses.shieldedEncryptionPublicKey,
+    async balanceTx(tx: any) {
+      const serialized = uint8ArrayToHex(tx.serialize());
+      const result = await connectedApi.balanceUnsealedTransaction(serialized);
+      const bytes = hexToUint8Array(result.tx);
+      return ledger.Transaction.deserialize('signature', 'proof', 'binding', bytes);
+    },
+  },
+  midnightProvider: {
+    submitTx: async (tx: any): Promise<string> => {
+      const serialized = uint8ArrayToHex(tx.serialize());
+      await connectedApi.submitTransaction(serialized);
+      return tx.identifiers()[0];
+    },
+  },
+};
+```
+
+**3. Connect to the contract**
+
+Import the contract module and attach it to the live instance on Preprod. `callTx` maps directly to your Compact circuits.
+
+```typescript
+const [{ findDeployedContract }] = await Promise.all([
+  import('@midnight-ntwrk/midnight-js-contracts'),
+]);
+
+const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
+const compiledContract = CompiledContract.make('stablecoin', contractModule.Contract).pipe(
+  CompiledContract.withVacantWitnesses,
+  CompiledContract.withCompiledFileAssets(CONTRACT_PATH)
+);
+
+const contract: any = await findDeployedContract(providers, {
+  contractAddress: CONTRACT_ADDRESS,
+  compiledContract,
+  privateStateId: 'stablecoinState',
+  initialPrivateState: {},
+});
+```
+
+**4. Execute the mint**
+
+Generate the zero-knowledge proof, then submit the transaction and await the hash
 
 ```typescript
 const txData = await contract.callTx.mintToContract(amount);
+onSuccess(txData.public.txId);
 ```
 
-Each key on `callTx` corresponds to an exported circuit in the compact circuit which in this case is 
-
-```typescript
-export circuit mintToContract(amount: Uint<64>): Bytes<32>
-```
-
-It uses `mintUnshieldedToken` internally.
-
-> **Note:** The proof generation might take some time before the popup appears. In this example a local proof server is used at port 6300, so it is fast.
+> **Note:** The proof generation might take some time before the popup appears. In this example, a local proof server is used at port 6300, so it is fast.
 
 ![Mint transaction success](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/3vow9usvg56pah0kzbw7.png)
 
@@ -281,7 +287,7 @@ This function takes user input and runs it through the helper function `encodeUs
 
 Now you can try to deposit the stablecoin token into the vault using `receiveUnshielded`. 
 
-The frontend has `handleReceive`. It functions in a similar way to `handleSend`: `store.receiveTokens(params...)` calls the exported circuit `receiveTokens(amount: Uint<128>)`, which has `receiveUnshielded(color, disclose(amount))` inside.
+The frontend has `handleReceive`. It functions similarly to `handleSend`: `store.receiveTokens(params...)` calls the exported circuit `receiveTokens(amount: Uint<128>)`, which has `receiveUnshielded(color, disclose(amount))` inside.
 
 ```typescript
    const handleReceive = async () => {
@@ -313,7 +319,7 @@ The frontend has `handleReceive`. It functions in a similar way to `handleSend`:
 
 ## 2. Statistics
 
-The vault smart contract has a state called `balance`. It returns a set of token balances. The approach here is to iterate through the balances array to find how many tokens match the token ID. For a token ID to appear, you need to execute a mint operation.
+The vault smart contract has a state called `balance`, which returns a set of token balances. The approach here is to iterate through the balances array to find how many tokens match the token ID. For a token ID to appear, you need to execute a mint operation.
 
 ```typescript
 export async function getContractBalance(): Promise<bigint> {
@@ -359,45 +365,57 @@ export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Prom
 }
 ```
 
-To retrieve `totalSupply`, create a function `getContractState()`. It calls `provider.queryContractState(CONTRACT_ADDRESS)` to return the needed data such as `totalSupply`.
+To retrieve `totalSupply`, create a function `getContractState()`. It works in three stages:
 
 ```typescript
 export async function getContractState(): Promise<ContractState> {
   try {
-    const mods = await getModules();
-    const { indexerModule } = mods;
-
-    const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
-    const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
-
-    const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
-    if (!contractState) {
-      console.log('[ContractState] No contract state found');
-      return { totalSupply: 0n, totalBurned: 0n };
-    }
-
-    const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
-    const ledgerState = contractModule.ledger(contractState.data);
-    
-    console.log('[ContractState] Ledger totalSupply:', ledgerState.totalSupply.toString());
-    console.log('[ContractState] Ledger totalBurned:', ledgerState.totalBurned.toString());
-    
-    return {
-      totalSupply: ledgerState.totalSupply,
-      totalBurned: ledgerState.totalBurned,
-    };
+    // stages below
   } catch (err) {
     console.error('[ContractState] Error:', err);
-    console.error('[ContractState] Error message:', err instanceof Error ? err.message : String(err));
-    console.error('[ContractState] Error stack:', err instanceof Error ? err.stack : '');
     return { totalSupply: 0n, totalBurned: 0n };
   }
 }
 ```
 
+**1. Query the indexer**
+
+Fetch the raw contract state from the Preprod indexer.
+
+```typescript
+const mods = await getModules();
+const { indexerModule } = mods;
+
+const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
+const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
+
+const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
+if (!contractState) {
+  return { totalSupply: 0n, totalBurned: 0n };
+}
+```
+
+**2. Deserialize into typed ledger state**
+
+The indexer returns raw bytes. Import the contract module and pass the raw data through `ledger()` to get typed fields like `totalSupply` and `totalBurned`.
+
+```typescript
+const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
+const ledgerState = contractModule.ledger(contractState.data);
+```
+
+**3. Return the values**
+
+```typescript
+return {
+  totalSupply: ledgerState.totalSupply,
+  totalBurned: ledgerState.totalBurned,
+};
+```
+
 ## 3. Wallet operations
 
-For displaying user receiving addresses and stablecoin balance, see section 2 for details on how to get the user's stablecoin balance.
+For displaying user receiving addresses and stablecoin balances, see section 2 for details on how to get the user's stablecoin balance.
 
 ```typescript
 const unshieldedAddress = await connectedApi.getUnshieldedAddress();
@@ -455,8 +473,7 @@ const handleSend = async () => {
     await sendStablecoin(recipient, BigInt(amount));
   };
 ```
-
-This is much simpler than the smart contract operations because `sendStablecoin` is available at the wallet level, not as a circuit call. It uses the DApp connector API to initiate the transfer and prompt the user.
+`sendStablecoin` is a wrapper built around `connectedApi.makeTransfer`. Instead of sending `nativeToken`, it passes the stablecoin token ID as the `type`, so the wallet knows which asset to transfer. The `makeTransfer` call below is what actually happens inside `sendStablecoin`: it constructs the output we need, balances the transaction, and submits it.
 
 ```javascript
       await makeTransfer(
@@ -480,26 +497,23 @@ This is much simpler than the smart contract operations because `sendStablecoin`
 
 Key differences from `contractSend`
 
-|| `contractSend` | `makeTransfer` |
-|---| --- | --- |
-|Funds source| Vault funds | User funds |
-|Mechanism | `handleSend` | DApp connector `makeTransfer` |
-|Address encoding| Requires encoding → `Bytes<32>` | Passes `Bech32m` directly |
-|ZK proofs| Required for circuit execution | Handled by wallet |
+| | `contractSend` | `makeTransfer` |
+| --- | --- | --- |
+| Funds source | Vault funds | User funds |
+| Mechanism | `handleSend` | DApp connector `makeTransfer` |
+| Address encoding | Requires encoding → `Bytes<32>` | Passes `Bech32m` directly |
+| ZK proofs | Required for circuit execution | Handled by wallet |
 
 ![Wallet-to-wallet transfer](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/rz2an0l2mqqc8jsc6h2s.png)
 
 
-## When to use unshielded vs shielded tokens and the privacy tradeoffs
+## When to use unshielded vs shielded tokens and the privacy trade-offs
 
-
-
-
-|| **Unshielded** | **Shielded** |
-|---| --- | --- |
-|Privacy Mechanism| None, completely transparent blockchain transactions | Zero-Knowledge proofs (Zswap) |
-|Legal Compliance| Can be audited for AML | Requires keys for selective disclosure|
-|Use cases| Compliant stablecoins... as required by regulators | Confidential transfers... |
+| | **Unshielded** | **Shielded** |
+| --- | --- | --- |
+| Privacy Mechanism | None, completely transparent blockchain transactions | Zero-Knowledge proofs (Zswap) |
+| Legal Compliance | Can be audited for AML | Requires keys for selective disclosure |
+| Use cases | Compliant stablecoins... as required by regulators | Confidential transfers...|
 
 ## Why choose unshielded for the stablecoin
 
@@ -513,12 +527,17 @@ Key differences from `contractSend`
 
 1. **Private tokenized securities:** Transfers are confidential while specific properties like voting rights remain verifiable.
 
-2. **Regulated industries requiring data minimization:** In healthcare, frameworks like GDPR, CCPA, and HIPAA require minimal data disclosure. Shielded tokens ensure sensitive information stays in local storage while zero-knowledge proofs can still confirm eligibility and compliance. 
+2. **Regulated industries requiring data minimization:** In healthcare, frameworks like GDPR, CCPA, and HIPAA require minimal data disclosure. Shielded tokens ensure sensitive information stays in local storage while zero-knowledge proofs can still confirm eligibility and compliance.
 
 3. **Forward secrecy:** Even if encryption keys are compromised in the future, shielded transactions remain private. This is something unshielded transactions cannot offer.
 
-> **The bottom line:** Midnight is multi-modal. It does not enforce privacy like XMR or transparency like BTC. It is permissionless — use whatever works for your project.
+## Conclusion
 
+Midnight's multi-modal design is different from other networks that enforce a single model. You are not forced into shielded transactions only, like XMR, or fully transparent ones, like Bitcoin. Instead, you can use whatever fits your use case at the circuit level.
+
+This matters because there may be a need to create a compliant asset, which can vary by jurisdiction and application. An issuer in Europe requires auditability for MiCA compliance, while a healthcare DAO might need shielded balances for GDPR.
+
+So having both of these options on the same chain is extremely important for these organizations, and it is only possible because Midnight lets you mix shielded and unshielded logic in the same network. It is completely permissionless, meaning there is no entity deciding what path or mode your application must use — only you can define the privacy boundary, not the protocol. For developers, this means you can start with unshielded patterns to stay compliant and later add support for shielded actions if regulations change or if you are operating in a different jurisdiction.
 
 ## Next steps
 

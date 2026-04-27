@@ -4,9 +4,9 @@ Let's build a full-stack DApp on Midnight network from scratch
 
 **Target audience:** Developers
 
-Within the next few sections you go through smart contract compilation and focus on the DApp lifecycle.
+Within the next few sections, you go through smart contract compilation and focus on the DApp lifecycle.
 
-You learn how to interact with smart contracts using a frontend as well as deploying them from a frontend and caching smart contract data off-chain on API and a database.
+You learn how to interact with smart contracts using a frontend, as well as deploying them from a frontend and caching smart contract data off-chain on an API and in a database.
 
 ## Prerequisites
 
@@ -28,7 +28,7 @@ witness localSecretKey(): Bytes<32>;
 witness findAgePath(commit: Bytes<32>): MerkleTreePath<10, Bytes<32>>;
 ```
 
-You would also need some essential ledgers which are:
+You also need some essential ledgers:
 
 - **`authority`** is used to store the public key of the admin (Only authority can issue attestations)
 
@@ -36,25 +36,25 @@ You would also need some essential ledgers which are:
   export sealed ledger authority: Bytes<32>;
   ```
 
-- **`ageCommitments`** use `HistoricMerkleTree` think of it as a secure cryptographic folder, this is used instead of a list because of privacy and later on the user can mathematically prove their commitment is inside this tree without the blockchain knowing which leaf belongs to them.
+- **`ageCommitments`** use `HistoricMerkleTree`. Think of it as a secure cryptographic folder. It is used instead of a list because of privacy, and later on the user can mathematically prove their commitment is inside this tree without the blockchain knowing which leaf belongs to them.
 
   ```typescript
   export ledger ageCommitments: HistoricMerkleTree<10, Bytes<32>>;
   ```
 
-- **`usedNullifiers`** whenever a user proves their age, a circuit generates a unique `nullifier` hash from their secret key, so if they try to prove a second time the circuit sees their `nullifier` is already present.
+- **`usedNullifiers`**: whenever a user proves their age, a circuit generates a unique `nullifier` hash from their secret key, so if they try to prove a second time, the circuit sees their `nullifier` is already present.
 
   ```typescript
   export ledger usedNullifiers: Set<Bytes<32>>;
   ```
 
-- **`totalAgeProofs`** is a simple ledger. It is called to increment later on the `proveAge()` circuit
+- **`totalAgeProofs`** is a simple ledger. It is incremented later in the `proveAge()` circuit
 
   ```typescript
   export ledger totalAgeProofs: Counter;
   ```
 
-You also need a simple constructor to initialize the smart contract, **Constructor arguments are witness data** in this case `authoritySk`
+You also need a simple constructor to initialize the smart contract. **Constructor arguments are witness data** — in this case, `authoritySk`.
 
 ```typescript
 constructor(authoritySk: Bytes<32>) {
@@ -63,7 +63,7 @@ constructor(authoritySk: Bytes<32>) {
 }
 ```
 
-The first circuit is `attestAge()`. It fetches the secret key via witness `localSecretKey()` and then checks if the entity attempting to run `attestAge()` is an authority or not.
+The first circuit is `attestAge()`. It fetches the secret key via the `localSecretKey()` witness and then checks whether the entity attempting to run `attestAge()` is an authority.
 
 ```typescript
 export circuit attestAge(userCommit: Bytes<32>): [] {
@@ -73,7 +73,7 @@ export circuit attestAge(userCommit: Bytes<32>): [] {
 }
 ```
 
-But as you can see `attestAge()` requires a `userCommit`, the user can forward a commitment to the authority so `userCommit` is an authority input to grant the user an attestation that they can use to prove their age.
+But as you can see, `attestAge()` requires a `userCommit`. The user can forward a commitment to the authority, so `userCommit` is an authority input to grant the user an attestation that they can use to prove their age.
 
 Create a private helper circuit `commitment()` to compute a deterministic hash with the user's secret key and a domain separator.
 
@@ -85,7 +85,7 @@ circuit commitment(sk: Bytes<32>, domain: Bytes<32>): Bytes<32> {
 }
 ```
 
-You can then use it in a circuit `getCommitment()` and because it is an export the frontend can execute this off-chain to generate the commitment.
+You can then use it in a `getCommitment()` circuit. Because it is an export, the frontend can execute this off-chain to generate the commitment.
 
 ```typescript
 export circuit getCommitment(sk: Bytes<32>, domain: Bytes<32>): Bytes<32> {
@@ -93,9 +93,9 @@ export circuit getCommitment(sk: Bytes<32>, domain: Bytes<32>): Bytes<32> {
 }
 ```
 
-The `proveAge()` circuit fetches `localSecretKey()` via witness and defines `domain` to age for this circuit. Then a `commitment` is computed using both values, and `findAgePath(commit)` witness is called. This is used to check whether there is an active attestation by an authority in the Merkle Tree or not, so then you can return whether a user has a valid attestation or not.
+The `proveAge()` circuit fetches `localSecretKey()` via witness and defines `domain` as `age` for this circuit. A `commitment` is computed using both values, and the `findAgePath(commit)` witness is called, which checks whether there is an active attestation by an authority in the Merkle Tree. If there is, you can return whether a user has a valid attestation.
 
-You then generate a `nullifier`. To understand why this is needed, you have to look at the privacy guarantees of the smart contract. If a user proves they are over 18 once, the blockchain only sees `TRUE` it does not know who proved it so without a `nullifier` a malicious user can spam the protocol with hundreds of generated on-chain proofs.
+You then generate a `nullifier`. To understand why this is needed, you have to look at the privacy guarantees of the smart contract. If a user proves they are over 18 once, the blockchain only sees `TRUE`; it does not know who proved it, so without a `nullifier`, a malicious user can spam the protocol with hundreds of generated on-chain proofs.
 
 ```typescript
 circuit nullifier(sk: Bytes<32>, domain: Bytes<32>): Bytes<32> {
@@ -130,14 +130,14 @@ export circuit proveAge(): Boolean {
 
 > **Note:** The example uses `domain` because the smart contract is set to handle multiple types of attestations (age, residency, certifications). Refer to the GitHub repo for more information.
 
-You now need to compile this smart contract but first install compact dev tools
+You now need to compile this smart contract, but first install compact dev tools
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
   https://github.com/midnightntwrk/compact/releases/latest/download/compact-installer.sh | sh
 ```
 
-Then run `compact compile contracts/Contract.compact src/contracts`. In this case you can assume `src/contracts` is a directory your frontend and API will use to load the compiled smart contract (ZKIR, keys...)
+Then run `compact compile contracts/Contract.compact src/contracts`. In this case, you can assume `src/contracts` is a directory your frontend and API will use to load the compiled smart contract (ZKIR, keys, etc.).
 
 ---
 
@@ -149,7 +149,7 @@ You begin by setting up a wallet connection. For this you need DApp connector AP
 import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
 ```
 
-You can discover installed wallets using `InitialAPI[]`. Each object is injected by the browser installed wallet extensions. In this case there are 3 wallets installed (1am, lace, GSD)
+You can discover installed wallets using `InitialAPI[]`. Each object is injected by the browser-installed wallet extensions. In this case, there are 3 wallets installed (1am, lace, GSD).
 
 ```typescript
 interface WalletSelectModalProps {
@@ -172,7 +172,7 @@ You can then proceed to map them, see full code [WalletConnectModal.tsx](https:/
 
 ![Wallet Selection UI](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/it8z72wbhmy0f5t72o0z.png)
 
-You also need to create a hook [useWallet.ts](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/src/hooks/useWallet.ts). It is a Zustand store that manages the entire wallet lifecycle, and it scans for installed wallets
+You also need to create a hook [useWallet.ts](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/src/hooks/useWallet.ts). It is a Zustand store that manages the entire wallet lifecycle, and it scans for installed wallets.
 
 ```typescript
 // 1. Find injected wallets
@@ -188,13 +188,13 @@ Then it proceeds to start a connection
       const status = await connectedApi.getConnectionStatus();
 ```
 
-> **Note:** You reuse `useWallet.ts` across all of the frontend pages (Deploy, Attest, Prove)
+> **Note:** You reuse `useWallet.ts` across all the frontend pages (Deploy, Attest, Prove)
 
-Your identity is derived deterministically from two inputs: `userPassword` + `shieldedAddresses.shieldedCoinPublicKey`. It is then hashed with domain specific salts (User/Authority) to generate `attest_sk` (Prove identity) for users and `authoritySk` (Deploy, Attest identity) for authorities.
+Your identity is derived deterministically from two inputs: `userPassword` + `shieldedAddresses.shieldedCoinPublicKey`. It is then hashed with domain-specific salts (User/Authority) to generate `attest_sk` (prove identity) for users and `authoritySk` (deploy/attest identity) for authorities.
 
-This derivation is used everywhere including `Deploy` to create the authority key, Attest to sign attestations and Prove to generate ZK proofs. Same wallet + same password always produces same key, so you do not lose your identity even if you clear browser storage. However, you would **lose** it if you forget your password.
+This derivation is used everywhere, including `Deploy` to create the authority key, `Attest` to sign attestations, and `Prove` to generate ZK proofs. Same wallet + same password always produces the same key, so you do not lose your identity even if you clear browser storage. However, you would **lose** it if you forget your password.
 
-This goes through a lock screen / session model as shown below
+This goes through a lock screen / session model, as shown below
 
 ![Lock Screen UI](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/sizdug72ug2xpp6r3i7a.png)
 
@@ -204,14 +204,14 @@ const masterKey = await deriveKeyFromPassword(userPassword, shieldedAddresses.sh
 
 The most crucial step of this project is making sure the witnesses are correctly set up. You need a [witnesses.ts](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/src/pages/witnesses.ts) file for this.
 
-Index.js needs to point to the path where you compiled the smart contract previously
+`index.js` needs to point to the path where you compiled the smart contract previously
 
 ```typescript
 import type { WitnessContext } from '@midnight-ntwrk/compact-runtime';
 import type { Ledger } from '../contracts/managed/attest/contract/index.js';
 ```
 
-You need to define `AttestPrivateState` this defines the shape of the smart contract's private state, the only data needed is the `secretKey` and `createAttestPrivateState` helper constructs an object.
+You need to define `AttestPrivateState`. This defines the shape of the smart contract's private state. The only data needed is the `secretKey`, and `createAttestPrivateState` is a helper that constructs an object.
 
 ```typescript
 export type AttestPrivateState = {
@@ -247,14 +247,14 @@ export const witnesses = {
 };
 ```
 
-You can now proceed to setup the providers as shown below:
+You can now proceed to set up the providers, as shown below:
 
-- `privateStateProvider` has `levelPrivateStateProvider` for persistent localstorage (IndexedDB)
-- `publicDataProvider` used for on-chain read state on the indexer
-- `zkConfigProvider` loads `FetchZkConfigProvider`  compiled verifiers, keys...
-- `proofProvider` responsible for generating zero-knowledge proofs on your proof server
-- `walletProvider` handles `balanceTx` via `connectedApi.balanceUnsealedTransaction`
-- `midnightProvider` submits tx via `connectedApi.submitTransaction`
+- `privateStateProvider`: uses `levelPrivateStateProvider` for persistent localStorage (IndexedDB)
+- `publicDataProvider`: reads on-chain state from the indexer
+- `zkConfigProvider`: loads `FetchZkConfigProvider` — compiled verifiers, keys...
+- `proofProvider`: generates zero-knowledge proofs on your proof server
+- `walletProvider`: handles `balanceTx` via `connectedApi.balanceUnsealedTransaction`
+- `midnightProvider`: submits transactions via `connectedApi.submitTransaction`
 
 ```typescript
       const providers = {
@@ -271,9 +271,9 @@ You can now proceed to setup the providers as shown below:
 
 ## 3. Deploy the smart contract
 
-You can now proceed to create [Deploy.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/src/pages/Deploy.tsx)
+You can now proceed to create [`Deploy.tsx`](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/src/pages/Deploy.tsx)
 
-Begin by setting the network, in this case it's `preprod`
+Begin by setting the network — in this case, it's `preprod`
 
 ```typescript
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
@@ -281,7 +281,7 @@ import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 setNetworkId('preprod');
 ```
 
-Do note that it is recommended to run a proof server locally
+Do note that it is recommended to run a proof server locally.
 
 ```bash
 # Run on docker
@@ -296,7 +296,7 @@ Then build the smart contract using `CompiledContract` API from `@midnight-ntwrk
       const compiledContract = CompiledContract.withCompiledFileAssets(ccWithWitnesses, ZK_ARTIFACTS_PATH);
 ```
 
-Then the next step is to deploy when passing `authoritySk` as argument so this makes the admin deploying the smart contract an authority with the ability to create attestations.
+Then the next step is to deploy, passing `authoritySk` as an argument. This makes the admin deploying the smart contract an authority with the ability to create attestations.
 
 ```typescript
       const deployed = await deployContract(providers as any, {
@@ -307,7 +307,7 @@ Then the next step is to deploy when passing `authoritySk` as argument so this m
       } as any);
 ```
 
-You then retrieve deployed address using
+You then retrieve the deployed address using
 
 ```typescript
 const address = deployed.deployTxData.public.contractAddress;
@@ -319,7 +319,7 @@ const address = deployed.deployTxData.public.contractAddress;
 
 ## 4. Generate a commitment
 
-A commitment is the bridge between your private identity and the public ledger. It is a deterministic hash computed from your secret key and a domain separator such as `age`. Because the hash is one-way, anyone can see the commitment on-chain without learning your secret key. This is the core of the privacy model: the authority knows *that* you are attested, but never learns *who* you are.
+A commitment is a tunnel between your private identity and the public ledger. It is a deterministic hash computed from the secret key (derived from `userPassword` + `shieldedAddresses.shieldedCoinPublicKey`) and a domain separator such as `age` (it could be anything — `residence`, etc.). Because the hash is one-way, anybody can see the commitment on-chain without learning your secret key. This is the core of the privacy model: the authority knows that you are attested but never learns who you are. **However**, be sure to force a strong password because an attacker can attempt to compute a similar commitment in many ways.
 
 The commitment is generated off-chain in [Home.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/src/pages/Home.tsx). The `getCommitment` circuit takes two inputs: your `secretKey` (passed as witness from your private state) and a `domain` such as `age`, `residency`, or `certification`. The domain acts as a namespace, so a commitment for `age` is completely different from a commitment for `residency` even when both use the same secret key.
 
@@ -330,11 +330,13 @@ The commitment is generated off-chain in [Home.tsx](https://github.com/0xfdbu/mi
       );
 ```
 
-The output is a 32-byte hash. Send this commitment to the authority through any channel of communication. The authority never sees your secret key; they only receive the commitment. Once the authority attests it, the commitment is inserted into the `ageCommitments` Merkle tree on-chain. At that point, you can then generate a zero-knowledge proof showing that your secret key produced a commitment that exists in the tree.
+The output is a `32-byte` hash. Send this commitment to the authority through any channel of communication. The authority never sees your secret key; they only receive the commitment. Once an attestation is created by the authority, the commitment is inserted into the `ageCommitments` Merkle tree on-chain. It can then be used to generate a zero-knowledge proof (ZKP) validating that your secret key produced a commitment that exists in the tree.
 
-Because the commitment is deterministic, the same wallet and password always produce the same hash. This means you can regenerate the exact same commitment on any machine, at any time, as long as you remember your password. If you forget the password, the commitment is lost forever, and any attestation tied to it becomes unusable.
+When the commitment is deterministic, the same wallet and password always generate the same hash. The current design does not rely on `localStorage` because, after careful consideration, a conclusion was made that having the secret key derived from the public key and a user password was the best approach to prevent losing your identity.
 
-Another design you could consider is making the private key into a file that the users can download however the same concept applies here if you lose your file you lose your identity.
+However, this has trade-offs because `shieldedAddresses.shieldedCoinPublicKey` can become visible on-chain, so if you use a weak password, an attacker who possesses it is able to brute-force your password. You need to be careful with how you handle this.
+
+Another design you could consider is making the private key into a file that the users can download; however, the same concept applies here — if you lose your file, you lose your identity.
 
 ![Commitment Builder UI](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/0p0eb1diwr083hbnpis5.png)
 
@@ -342,7 +344,7 @@ Another design you could consider is making the private key into a file that the
 
 ## 5. Attest a credential
 
-Here the authority can create an attestation by selecting type and pasting the user commitment.
+Here, the authority can create an attestation by selecting type and pasting the user commitment.
 
 This page goes through a couple of steps:
 
@@ -407,9 +409,9 @@ Before you can interact with the deployed smart contract, you need to reconstruc
 
 ### Connect to the deployed smart contract
 
-`findDeployedContract()` does more than connect. It queries the on-chain contract state, extracts the embedded verifier keys, and compares them byte-for-byte against the compiled artifacts you just loaded. If there is a mismatch — for example, if someone deployed a different version of the contract — the call throws immediately. This protects you from accidentally interacting with the wrong smart contract.
+`findDeployedContract()` has multiple uses. It fetches the on-chain smart contract state, then extracts the embedded verifier keys and compares them head-to-head with the compiled artifacts generated after running `compact contracts/Contract.compact {compile_path}`. If there is a mismatch between the verifier keys, it throws an error instead of proceeding. This acts like protection against accidentally interacting with the wrong smart contract.
 
-The function also initializes your local private state. You pass `authoritySk` inside `createAttestPrivateState()` so the witness `localSecretKey()` can resolve correctly when the circuit runs. If the private state ID collides with another role (for example, the prover state), the authentication step fails with an opaque error, so keeping `attestState` separate is critical.
+`findDeployedContract()` also initializes your local private state. You pass `authoritySk` inside `createAttestPrivateState()` so the witness `localSecretKey()` can resolve correctly when the circuit runs. If the private state ID collides with another role — for example, the prover state — the authentication step would fail with an error, so keeping `attestState` separate is crucial.
 
 ```javascript
       await findDeployedContract(providers as never, {
@@ -422,7 +424,9 @@ The function also initializes your local private state. You pass `authoritySk` i
 
 ### Create the transaction interface
 
-`createCircuitCallTxInterface()` builds a typed proxy over the deployed smart contract. Instead of manually constructing transactions, you call methods directly — `txInterface.attestAge(commitBytes)` — and the library handles the rest. Under the hood, it looks up the circuit definition, wires the witnesses, prepares the private state, and returns a transaction builder that you can execute.
+`createCircuitCallTxInterface()` aims to build a proxy over the deployed smart contract. Instead of manually building transactions, you can call methods such as `txInterface.attestAge(commitBytes)` directly, and the installed library handles constructing the transaction.
+
+This looks up the circuit definition, wires the witnesses, and prepares the private state, then returns a transaction builder that you can directly execute.
 
 ```typescript
       const txInterface = createCircuitCallTxInterface(
@@ -433,16 +437,16 @@ The function also initializes your local private state. You pass `authoritySk` i
       );
 ```
 
-### Execute the attestation
+### Attestation Execution
 
-Calling `attestAge()` triggers the full Midnight transaction lifecycle:
+Calling `attestAge()` triggers the full Midnight transaction process:
 
-1. **Witness resolution** — `localSecretKey()` fetches `authoritySk` from your private state
-2. **Authority check** — the circuit verifies `publicKey(sk) == authority` on-chain
-3. **Proof generation** — the proof server generates a zero-knowledge proof that the authority check passes without revealing `authoritySk`
-4. **Transaction balancing** — `walletProvider` sends the unsigned transaction to your wallet extension, which adds fees and signs it
-5. **Submission** — `midnightProvider` broadcasts the signed transaction to the network
-6. **Confirmation** — the transaction is included in a block and the commitment is inserted into the `ageCommitments` Merkle tree
+1. **Witness resolution**: `localSecretKey()` fetches `authoritySk` from the private state
+2. **Authority check**: the circuit verifies whether the user is an authority by checking if `publicKey(sk) == authority` on-chain
+3. A zero-knowledge proof is then generated by the proof server, proving that the authority check passes.
+4. **Transaction balancing**: `walletProvider` sends the unsigned transaction to your wallet extension/provider, which calculates fees and signs it.
+5. **Submission**: `midnightProvider` broadcasts the signed transaction to the Midnight network
+6. **Confirmation**: the transaction is included in a block, and the commitment is inserted into the `ageCommitments` Merkle Tree. The user will then be able to use that commitment to prove their age.
 
 ```typescript
 result = await (txInterface as any).attestAge(commitBytes);
@@ -450,7 +454,7 @@ result = await (txInterface as any).attestAge(commitBytes);
 
 ![Attestation UI](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/4rt7hni1x2uvr1uw1r4m.png)
 
-Now the user has a valid attestation under their unique `commitment` which was computed using the secret key passed through witness.
+Now the user has a valid attestation under their unique `commitment`, which was computed using the secret key passed through witness.
 
 ---
 
@@ -458,11 +462,11 @@ Now the user has a valid attestation under their unique `commitment` which was c
 
 The user can now attempt to verify and generate a proof in [Prove.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/src/pages/Prove.tsx)
 
-`handleProve()` goes through a similar flow to `handleAttest()` except that it calls the circuit `proveAge()` and uses `attestSk` instead of `authoritySk` to authenticate.
+`handleProve()` goes through a similar flow to `handleAttest()`, except that it calls the `proveAge()` circuit and uses `attestSk` instead of `authoritySk` to authenticate.
 
-`privateStateId` is also different. Attest must pass `attestState` while Prove must pass `attestProverState` otherwise it crashes with `Unsupported state unable to authenticate data`
+`privateStateId` is also different. Attest must pass `attestState`, while Prove must pass `attestProverState` — otherwise it crashes with `Unsupported state unable to authenticate data`
 
-`initialPrivateState` is different. Attest passes `createAttestPrivateState(authoritySk)` while Prove must pass `{ secretKey: attestSk }` — the prover identity key, not the authority key.
+`initialPrivateState` is different too. Attest passes `createAttestPrivateState(authoritySk)`, while Prove must pass `{ secretKey: attestSk }` — the prover identity key, not the authority key.
 
 ```typescript
 result = await (txInterface as any).proveAge();
@@ -470,7 +474,7 @@ result = await (txInterface as any).proveAge();
 
 ![Prove UI](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/xvjck4o19r4gmpysnny9.png)
 
-Now let's look at the nullifier in action. In this example the age has already been verified, as you can see in the explorer `proveAge`
+Now let's look at the nullifier in action. In this example, the age has already been verified, as you can see in the explorer: `proveAge`
 
 https://explorer.1am.xyz/tx/a6b14a14c15d486bc547a449342cc196036be74e4c04699f2a6a1be1ebd03ccb
 
@@ -486,10 +490,10 @@ This means the smart contract is working exactly as intended — the `nullifier`
 
 ## 7. State read flow
 
-When you unlock the Home page, it checks whether you are an authority or not. It does this by querying the smart contract state from the indexer. The raw state data is fed into `contractModule.ledger()` which deserializes it into typed ledger fields, including `authority: Bytes<32>`.
+When you unlock the Home page, it checks whether you are an authority or not. It does this by querying the smart contract state from the indexer. The raw state data is fed into `contractModule.ledger()`, which deserializes it into typed ledger fields, including `authority: Bytes<32>`.
 
 
-```
+```javascript
         // Compute publicKey(authoritySk) using the same hash as the contract
         const enc = new TextEncoder();
         const pad = new Uint8Array(32);
@@ -503,14 +507,14 @@ When you unlock the Home page, it checks whether you are an authority or not. It
 
         const ledger = contractModule.ledger(state.data);
         const onChainAuthority = ledger.authority;
-```       
-
-The frontend derives your authority secret key from the same master key that unlocked your identity, then hashes it through the smart contract's `publicKey()` circuit to produce your authority public key. If the on-chain authority matches your computed public key byte-for-byte, a green badge appears saying "You are the authority". If there is a mismatch, a grey badge shows "Not the authority"
-
 ```
+
+The frontend derives your authority secret key from the same master key that unlocked your identity, then hashes it through the smart contract's `publicKey()` circuit to produce your authority public key. If the on-chain authority matches your computed public key byte-for-byte, a green badge appears saying "You are the authority". If there is a mismatch, a grey badge shows "Not the authority".
+
+```javascript
         const match = onChainAuthority.length === authorityPublicKey.length &&
           onChainAuthority.every((b: number, i: number) => b === authorityPublicKey[i]);
-```          
+```
 
 
 ![Authority Badge UI](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/wdvxbvplidwor9tgsn3u.png)
@@ -519,13 +523,37 @@ The frontend derives your authority secret key from the same master key that unl
 
 ## 8. Off-chain API to store data
 
-Reading smart contract state directly from the indexer on every page load is slow, adds unnecessary load to the network, and creates a poor user experience. Instead, run a lightweight Express server that polls the indexer every 15 seconds and caches the results in PostgreSQL. The frontend then reads from this cache in milliseconds rather than waiting for a remote GraphQL query.
+Directly requesting the smart contract state from the indexer can result in an unnecessary load to the network and creates a slow, poor user experience. A solution to this is to run a lightweight Express server connected to PostgreSQL. It polls the indexer every 15 seconds or so and caches the data inside PostgreSQL, improving the user experience.
+
+This imports a factory function `PublicDataProvider`, a component responsible for querying data via GraphQL on the indexer.
+```typescript
+import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
+```
+
+This is used for `setNetworkId('preprod')`, which sets the network to preprod
+```typescript
+import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
+```
+Importing `compact-runtime` is very important. `contractRuntime.ContractState.deserialize(serialized)` is used to reconstruct a contract's state from its serialized bytes so we can read ledger data such as `totalAgeProofs`.
+```typescript
+import * as contractRuntime from '@midnight-ntwrk/compact-runtime';
+```
+You must use the V4 Midnight Indexer GraphQL endpoints
+```typescript
+const INDEXER_HTTP = 'https://indexer.preprod.midnight.network/api/v4/graphql';
+const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
+```
 
 ### Database schema
 
-On startup, `initDb()` drops and recreates two tables. The `contracts` table tracks which smart contract addresses are being monitored. The `contract_states` table stores every polled snapshot with counters for age, residency, and certification proofs.
+When you start the server, it begins tracking the hardcoded smart contract
 
 ```typescript
+const TRACKED_CONTRACT = '331460e632fad9146d23b2176433413e8405976afef8a6f0999dda10433f599d';
+```
+Also, a simple database schema is initiated to store the data. The `contracts` table tracks which smart contracts are being monitored.
+
+```sql
 await sql`
   CREATE TABLE contracts (
     address TEXT PRIMARY KEY,
@@ -549,7 +577,8 @@ await sql`
 
 ### Polling lifecycle
 
-When the server starts, it calls `startPolling(TRACKED_CONTRACT)`. This immediately fetches the current state, then registers a `setInterval` loop that repeats every 15 seconds. If the server shuts down gracefully, `stopPolling()` clears the interval and closes the database connection.
+When you start the server, it calls `startPolling(TRACKED_CONTRACT)`. `TRACKED_CONTRACT` is a hardcoded `331460e632fad9146d23b2176433413e8405976afef8a6f0999dda10433f599d` smart contract value. It then begins fetching the current state and registers a `setInterval` loop repeating every 15 seconds. If the server shuts down, `stopPolling()` clears the interval and closes the database connection.
+
 
 ```typescript
 function startPolling(address: string) {
@@ -570,7 +599,7 @@ function startPolling(address: string) {
 
 ### Parsing and inserting state
 
-The raw state returned by the indexer is not directly usable by the generated contract code. It must first be serialized back into bytes, then deserialized through `ContractState.deserialize()`, and finally passed to `ledger()` to extract typed fields like `totalAgeProofs`. The `insertState()` function writes these parsed values into the `contract_states` table and updates the `contracts` timestamp.
+Raw states returned by the indexer GraphQL V4 endpoint are not readable by the generated smart contract code. They must first be serialized back into bytes, then deserialized through `ContractState.deserialize()`. This is when `@midnight-ntwrk/compact-runtime` comes in. Finally, the state is passed to `ledger()` to extract fields such as `totalAgeProofs` (number of age proofs committed), and then the `insertState()` function inserts the values into the PostgreSQL database `contract_states` table.
 
 ```typescript
 async function parseContractState(address: string, state: any) {
@@ -588,7 +617,7 @@ async function parseContractState(address: string, state: any) {
 
 ### Serving cached data
 
-The frontend calls `GET /contract` to retrieve the latest cached snapshot. The endpoint joins the `contracts` and `contract_states` tables, returning the most recent row ordered by `recorded_at`.
+The frontend sends a `GET /contract` request to retrieve the latest snapshot stored in the database. The endpoint joins the `contracts` and `contract_states` tables, returning the most recent row ordered by `recorded_at`.
 
 ```typescript
 app.get('/contract', async (req, res) => {
@@ -612,16 +641,16 @@ app.get('/contract', async (req, res) => {
 });
 ```
 
-In the frontend, the Home page fetches this endpoint on mount and refreshes the badge counters every few seconds. Because the data is cached locally, the UI updates instantly even when the indexer is under load.
+In the frontend, the Home page sends a request to the endpoint `/contract` to return the cached data, which is then rendered.
 
 ![API Polling Logs](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/s9tfyfxu0giutys8dzpu.png)
 
-Now the data is being successfully cached `age=2 residency=1 cert=0` 
+Now the data is being successfully cached: `age=2 residency=1 cert=0`
 
 
 ## Conclusion
 
-You have now built a full-stack DApp on Midnight network, a complete ZK (zero-knowledge) attestation system. It is composed of: a Compact contract enforcing privacy-preserving proofs, a React frontend that derives identities deterministically from nothing but a wallet and a password, and an Express API that caches smart contract state. Your identity is not stored. This means if you lose your password you lose your identity. These critical design decisions are worth remembering.
+You have now built a full-stack DApp on the Midnight network: a complete ZK (zero-knowledge) attestation system. It is made up of a Compact contract enforcing privacy-preserving zero-knowledge proofs, a UI that derives identities deterministically from nothing but a wallet's `shieldedAddresses.shieldedCoinPublicKey` and a user password, and an Express API that caches smart contract state(s). Your identity is not stored. This means if you lose your password, you lose your identity. These critical design decisions are worth remembering.
 
 ## Next steps
 
