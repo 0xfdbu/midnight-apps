@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Wallet state & local DBs
+.wallet-state/
+midnight-level-db/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
