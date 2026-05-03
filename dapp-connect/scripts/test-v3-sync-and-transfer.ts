@@ -33,14 +33,6 @@ async function main() {
   process.on('SIGINT', saveBeforeExit);
   process.on('SIGTERM', saveBeforeExit);
 
-  // Helper: check if dust is "close enough" to tip (allows partial sync to proceed)
-  const isDustCloseEnough = (s: any, maxGap: bigint = 1000n): boolean => {
-    const dp = s.dust?.progress;
-    if (!dp) return false;
-    const gap = BigInt(Math.abs(Number(dp.highestRelevantWalletIndex - dp.appliedIndex)));
-    return dp.isConnected && gap <= maxGap;
-  };
-
   try {
     const syncedState = await Rx.firstValueFrom(
       ctx.wallet.state().pipe(
@@ -57,19 +49,11 @@ async function main() {
             `dustBal=${s.dust?.balance ? s.dust.balance(new Date()).toString() : '0'}`
           );
         }),
-        Rx.filter((s: any) => {
-          if (s.isSynced) return true;
-          // Fallback: allow proceeding if shielded/unshielded are strict and dust is within 1k blocks
-          const sp = s.shielded?.progress;
-          const up = s.unshielded?.progress;
-          const shieldedDone = sp && BigInt(sp.highestRelevantWalletIndex - sp.appliedIndex) === 0n;
-          const unshieldedDone = up && BigInt(up.highestTransactionId - up.appliedId) === 0n;
-          return shieldedDone && unshieldedDone && isDustCloseEnough(s, 1000n);
-        }),
+        Rx.filter((s: any) => s.isSynced === true),
         Rx.timeout(120 * 60 * 1000), // 2 hours for first-time dust sync
       )
     );
-    console.log('[Test] ✅ Synced enough! Dust:', syncedState.dust?.balance(new Date())?.toString());
+    console.log('[Test] ✅ Fully synced! Dust:', syncedState.dust?.balance(new Date())?.toString());
   } catch (e: any) {
     console.error('[Test] ❌ Sync failed or timed out:', e.message || e);
     await saveWalletState(ctx, '.wallet-state'); // save whatever progress we made

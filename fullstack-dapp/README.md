@@ -50,7 +50,7 @@ TRACKED_CONTRACT=331460e632fad9146d23b2176433413e8405976afef8a6f0999dda10433f599
 
 ## Running the Project
 
-### 1. Compile the smart contract [Skip If you want to use my generate keys]
+### 1. Compile the smart contract [Skip Compiling if you want to use my deployed contract]
 
 ```bash
 npm install

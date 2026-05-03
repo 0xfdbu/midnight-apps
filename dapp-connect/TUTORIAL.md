@@ -1,4 +1,4 @@
-This guide walks through the complete lifecycle of connecting web apps to the Midnight blockchain. You will learn how to detect injected wallets in the browser, make a connection, monitor state changes, and submit transactions through both the browser extension flow and the CLI. You will also understand the difference between `balanceUnsealedTransaction` (browser via dApp connector) and the CLI backend path.
+This guide walks through the complete lifecycle of connecting web apps to the Midnight blockchain. You learn how to detect injected wallets in the browser, make a connection, monitor state changes, and submit transactions through both the browser extension flow and the CLI. You also learn the difference between them.
 
 **Target audience:** Developers
 
@@ -7,9 +7,9 @@ This guide walks through the complete lifecycle of connecting web apps to the Mi
 ## Prerequisites
 
 - Node.js installed (v20+)
-- A Midnight Wallet (e.g., 1AM or Lace)
+- A Midnight wallet (for example, 1AM or Lace)
 - Some Preprod [faucet](https://faucet.preprod.midnight.network/) NIGHT tokens
-- A `package.json` with the needed Midnight packages:
+- A [`package.json`](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/package.json) with the needed packages:
   - `@midnight-ntwrk/dapp-connector-api`
   - `@midnight-ntwrk/ledger-v8`
   - `@midnight-ntwrk/midnight-js-utils`
@@ -23,62 +23,30 @@ This guide walks through the complete lifecycle of connecting web apps to the Mi
 
 ---
 
-## Architecture: Browser vs CLI
+## Architecture: browser vs CLI
 
-Midnight dApps operate in two different security contexts. Understanding the boundary between them is essential before writing any code.
+Midnight DApps operate in two different security contexts. Understanding the boundary between them is essential before writing any code.
 
 | Context | Custodian | Balancing method | Signature | Use case |
 |---------|-----------|------------------|-----------|----------|
-| **Browser / dApp** | Wallet extension (Lace, 1AM) | `balanceUnsealedTransaction` | Wallet handles it | UI / dApps |
-| **CLI / Backend** | Your script | `transferTransaction` + `signRecipe` | Manual via keystore | Agents, Automation |
+| **Browser / DApp** | Injected extension | `balanceUnsealedTransaction` | Wallet handles it | UI / DApps |
+| **CLI / backend** | Your script | `transferTransaction` + `signRecipe` | Manual | Agents, automation |
 
-In the **browser flow**, the wallet extension holds the user's private key (typically encrypted on the user's device with a password). All keys are derived internally and the dApp never sees secret material. The dApp builds a transaction blueprint, serializes it, and hands it to the wallet via the **dApp Connector API**. The wallet selects inputs, adds balancing outputs via `balanceUnsealedTransaction`, creates signatures, and returns a finalized transaction.
+In the **browser flow**, the wallet extension handles the user's private key (typically encrypted on the user's device with a password). All keys are derived internally, and the DApp never sees secret material. The DApp builds a transaction blueprint, serializes it, and hands it to the wallet through the **DApp Connector API**. The wallet selects inputs, adds balancing outputs through `balanceUnsealedTransaction`, creates the signatures, and returns a finalized transaction.
 
 In the **CLI / backend flow**, your script holds the 24-word mnemonic directly. It derives `ZswapSecretKeys`, `DustSecretKey`, and an `UnshieldedKeystore` from the mnemonic. Because there is no wallet extension to handle balancing and signing, the script uses `transferTransaction` to build a recipe, then `signRecipe` with the unshielded keystore, then `finalizeRecipe` and `submitTransaction`. The script acts as the wallet.
 
-Both flows submit the same transaction format to the Midnight Preprod network. The only difference is who holds the keys and who performs the balancing.
+Both flows submit the same transaction format to the Midnight network. The only difference is who holds the keys and who performs the balancing.
 
 ---
 
-## Detecting Wallets via `window.midnight`
+## Detecting wallets via `window.midnight`
 
-Midnight wallet extensions inject a global `window.midnight` object before the page loads. Each wallet registers itself under a unique key — its `rdns` (reverse domain name).
+Midnight wallets inject a global `window.midnight` object before page load.
 
-We keep the detection logic in a Zustand store. Here is the actual hook we use:
+**Note:** `COMPATIBLE_CONNECTOR_API_VERSION` is `'4.x'`, not `'^4.0.0'`. The `'4.x'` semver range accepts any `4.x.y` version the wallet reports.
 
-```typescript
-// src/hooks/useWallet.ts
-import { create } from 'zustand';
-import semver from 'semver';
-import type {
-  InitialAPI,
-  ConnectedAPI,
-  Configuration as WalletConfiguration,
-} from '@midnight-ntwrk/dapp-connector-api';
-import { COMPATIBLE_CONNECTOR_API_VERSION, NETWORK_ID } from './wallet.constants';
-import type { WalletAddresses, WalletBalances } from '../types/wallet';
-
-export interface WalletState {
-  wallet: InitialAPI | null;
-  connectedApi: ConnectedAPI | null;
-  isConnecting: boolean;
-  isConnected: boolean;
-  error: string | null;
-  config: WalletConfiguration | null;
-  addresses: WalletAddresses | null;
-  balances: WalletBalances | null;
-  isLoadingState: boolean;
-  showAccountModal: boolean;
-  setShowAccountModal: (show: boolean) => void;
-  setWallet: (wallet: InitialAPI | null) => void;
-  connect: (networkId?: string) => Promise<void>;
-  disconnect: () => void;
-  loadWalletState: () => Promise<void>;
-  resetError: () => void;
-}
-```
-
-And the constants we filter by:
+View the full [`wallet.constants.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/hooks/wallet.constants.ts) and [`useWallet.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/hooks/useWallet.ts) files on GitHub.
 
 ```typescript
 // src/hooks/wallet.constants.ts
@@ -86,9 +54,7 @@ export const COMPATIBLE_CONNECTOR_API_VERSION = '4.x';
 export const NETWORK_ID = 'preprod';
 ```
 
-Notice we use `'4.x'` — not `'^4.0.0'`. The `4.x` semver range accepts any `4.x.y` version the wallet reports.
-
-The detection function enumerates `window.midnight`, validates each entry, and filters by version:
+The detection function enumerates `window.midnight`, validates each entry, and filters by version.
 
 ```typescript
 // src/hooks/useWallet.ts
@@ -105,28 +71,14 @@ export function getCompatibleWallets(): InitialAPI[] {
 }
 ```
 
-If `window.midnight` is undefined, no extension is installed. If it exists but no compatible version is found, the user has an old extension.
+### Wallet selection modal
 
-### Wallet Selection Modal
+When one or more wallets are installed, a modal is shown so the user can pick.
 
-When multiple wallets are installed, we show a modal letting the user pick:
+View the full [`WalletSelectModal.tsx`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/components/WalletSelectModal.tsx) file on GitHub.
 
 ```tsx
 // src/components/WalletSelectModal.tsx
-import { useState } from 'react';
-import { Button } from './ui/Button';
-import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-import laceSvg from '../assets/lace.svg?url';
-import iamSvg from '../assets/1am.svg?url';
-
-interface Props {
-  isOpen: boolean;
-  onClose: () => void;
-  wallets: InitialAPI[];
-  onSelect: (wallet: InitialAPI) => void;
-  connecting: boolean;
-}
-
 function getWalletIcon(rdns: string | undefined): string | null {
   if (!rdns) return null;
   if (rdns.includes('lace')) return laceSvg;
@@ -134,113 +86,50 @@ function getWalletIcon(rdns: string | undefined): string | null {
   return null;
 }
 
-function WalletIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
-      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
-      <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
 export function WalletSelectModal({ isOpen, onClose, wallets, onSelect, connecting }: Props) {
   const [pending, setPending] = useState<InitialAPI | null>(null);
-
   if (!isOpen) return null;
 
   return (
-    <div className="relative w-[380px] bg-bg-secondary border border-border rounded-2xl shadow-2xl shadow-black/40 overflow-hidden">
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border-hover to-transparent" />
-
-      <div className="px-6 pt-7 pb-6">
-        <div className="mb-6">
-          <h3 className="text-[17px] font-semibold tracking-tight text-white">Connect Wallet</h3>
-          <p className="text-text-muted text-[13px] mt-1">Choose a wallet to get started</p>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          {wallets.map((w) => {
-            const icon = getWalletIcon(w.rdns);
-            return (
-              <button
-                key={w.rdns}
-                onClick={() => {
-                  setPending(w);
-                  onSelect(w);
-                }}
-                disabled={connecting}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-bg-tertiary active:scale-[0.98] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 group outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
-              >
-                <div className="w-10 h-10 rounded-xl bg-bg-tertiary border border-border/50 flex items-center justify-center shrink-0 group-hover:border-border-hover transition-colors">
-                  {icon ? (
-                    <img src={icon} alt="" className="w-5 h-5 object-contain" />
-                  ) : (
-                    <WalletIcon className="w-5 h-5 text-text-muted" />
-                  )}
-                </div>
-
-                <span className="flex-1 text-left text-[15px] font-medium text-white/80 group-hover:text-white transition-colors">
-                  {w.name}
-                </span>
-
-                <ChevronRightIcon className="w-4 h-4 text-text-muted/0 group-hover:text-text-muted/80 group-hover:translate-x-0.5 transition-all duration-150 shrink-0" />
-              </button>
-            );
-          })}
-        </div>
-
-        {connecting && pending && (
-          <div className="mt-4 text-center text-sm text-neutral-300">
-            Connecting to {pending.name}...
-            <div className="mt-2 w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto" />
-          </div>
-        )}
-
-        <div className="mt-5 pt-4 border-t border-border/50">
-          <Button
-            variant="ghost"
-            className="w-full text-text-muted hover:text-text-secondary text-[13px]"
-            onClick={onClose}
-            disabled={connecting}
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
+    <div>
+      <h3>Connect Wallet</h3>
+      {wallets.map((w) => (
+        <button
+          key={w.rdns}
+          onClick={() => {
+            setPending(w);
+            onSelect(w);
+          }}
+          disabled={connecting}
+        >
+          <img src={getWalletIcon(w.rdns) ?? fallback} />
+          <span>{w.name}</span>
+        </button>
+      ))}
+      {connecting && pending && <div>Connecting to {pending.name}...</div>}
+      <Button onClick={onClose} disabled={connecting}>Cancel</Button>
     </div>
   );
 }
 ```
 
-You discover installed wallets using `InitialAPI[]`. Each object is injected by a browser-installed wallet extension. In this example, multiple wallets may be installed (1AM, Lace, others).
+Installed wallets are discovered using `InitialAPI[]`. Each object is injected by a browser-installed wallet extension.
+
+![Wallet selection modal showing Lace and 1AM options](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/sgyn1lccxmea8ubwizb4.png)
 
 ---
 
 ## Connecting to Lace or 1AM
 
-The `ConnectButton` ties detection, selection, and connection together. If one wallet is detected, it connects immediately. If multiple are detected, it opens the modal. Once connected, clicking the button opens an account modal instead of disconnecting.
+`ConnectButton` ties detection, selection, and connection together. If a single wallet is detected, it directly prompts for wallet connection approval. If multiple wallets are detected, a modal is shown.
+
+View the full [`ConnectButton.tsx`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/components/ConnectButton.tsx) file on GitHub.
 
 ```tsx
 // src/components/ConnectButton.tsx
-import { useState } from 'react';
-import { Button } from './ui/Button';
-import { Modal } from './ui/Modal';
-import { WalletSelectModal } from './WalletSelectModal';
-import { useWalletStore, getCompatibleWallets } from '../hooks/useWallet';
-import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-
 export function ConnectButton() {
-  const { isConnected, isConnecting, connect, setWallet, addresses, wallet, setShowAccountModal } = useWalletStore();
-  const [wallets] = useState<InitialAPI[]>(() => getCompatibleWallets());
+  const { isConnected, connect, setWallet, setShowAccountModal } = useWalletStore();
+  const [wallets] = useState(() => getCompatibleWallets());
   const [showModal, setShowModal] = useState(false);
 
   const handleConnect = async (selectedWallet: InitialAPI) => {
@@ -259,14 +148,9 @@ export function ConnectButton() {
     }
   };
 
-  // ...button render logic
-
   return (
     <>
-      <Button onClick={handleClick}>
-        {/* connected address or "Connect Wallet" */}
-      </Button>
-
+      <Button onClick={handleClick}>Connect Wallet</Button>
       <Modal isOpen={showModal} onClose={() => setShowModal(false)}>
         <WalletSelectModal
           isOpen={showModal}
@@ -281,9 +165,13 @@ export function ConnectButton() {
 }
 ```
 
-### The Connection Flow
+![Connect button showing connected wallet address](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/4en7fenw9zvy1gp0wobk.png)
 
-When `connect()` is called on the store, it triggers the wallet extension's connection flow. The user may see a popup asking for approval.
+### The connection flow
+
+When `wallet.connect(networkId)` is called, it triggers the wallet extension connection flow.
+
+View the full [`useWallet.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/hooks/useWallet.ts) file on GitHub.
 
 ```typescript
 // src/hooks/useWallet.ts
@@ -327,7 +215,6 @@ connect: async (networkId = NETWORK_ID) => {
       },
     });
 
-    // Persist for auto-reconnect
     localStorage.setItem('midnight_last_wallet', wallet.rdns);
   } catch (err) {
     set({
@@ -341,11 +228,11 @@ connect: async (networkId = NETWORK_ID) => {
 },
 ```
 
-Key detail: `connect()` fetches **addresses**, not balances. The `dustAddress` is fetched here; balances are loaded separately in `loadWalletState()`.
+**Note:** `connect()` fetches addresses, not balances. The `dustAddress` is fetched here, but balances are loaded separately in `loadWalletState()`.
 
-### Auto-Reconnect
+### Auto-reconnect
 
-We store the last connected wallet's `rdns` in `localStorage` and attempt to reconnect on page load:
+Store the last connected wallet's `rdns` in `localStorage` and attempt to reconnect on page reload.
 
 ```typescript
 // src/hooks/useWallet.ts
@@ -363,9 +250,11 @@ export async function tryAutoConnect(): Promise<void> {
 }
 ```
 
-### Account Modal
+### Account modal
 
-Clicking the connected button opens a popup showing balances, addresses, copy buttons, refresh, and disconnect — instead of immediately disconnecting:
+Clicking the connected button opens a popup showing balances, addresses, copy buttons, refresh, and disconnect.
+
+View the full [`AccountModal.tsx`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/components/AccountModal.tsx) file on GitHub.
 
 ```tsx
 // src/components/AccountModal.tsx
@@ -391,22 +280,19 @@ export function AccountModal() {
 }
 ```
 
+![Account modal showing balances and addresses](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/vdcftgx3upsmc4oukz5i.png)
+
 ---
 
-## Subscribing to Wallet State Changes
+## Subscribing to wallet state changes
 
-The dApp Connector API v4 does **not** expose a native push/subscription API. Reactive updates are built on top of polling.
+The DApp Connector v4 API does not expose a native push/subscription API. Reactive updates are built on top of polling.
 
-### Browser: Polling-Based Updates
-
-We use a hook that polls balances and connection status:
+View the full [`useWalletSubscription.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/hooks/useWalletSubscription.ts) file on GitHub.
 
 ```typescript
 // src/hooks/useWalletSubscription.ts
-import { useEffect, useRef } from 'react';
-import { useWalletStore } from './useWallet';
-
-export function useWalletSubscription(options: { balanceInterval?: number; connectionInterval?: number } = {}) {
+export function useWalletSubscription(options = {}) {
   const { balanceInterval = 15000, connectionInterval = 5000 } = options;
   const { connectedApi, isConnected, loadWalletState, disconnect } = useWalletStore();
   const lastStatusRef = useRef<'connected' | 'disconnected'>('disconnected');
@@ -427,13 +313,9 @@ export function useWalletSubscription(options: { balanceInterval?: number; conne
       try {
         const status = await connectedApi.getConnectionStatus();
         lastStatusRef.current = status.status;
-        if (status.status === 'disconnected') {
-          disconnect();
-        }
+        if (status.status === 'disconnected') disconnect();
       } catch {
-        if (lastStatusRef.current === 'connected') {
-          disconnect();
-        }
+        if (lastStatusRef.current === 'connected') disconnect();
       }
     };
 
@@ -443,7 +325,7 @@ export function useWalletSubscription(options: { balanceInterval?: number; conne
 }
 ```
 
-The `loadWalletState` action fetches all three balance types in parallel:
+`loadWalletState` fetches all balance types at the same time.
 
 ```typescript
 // src/hooks/useWallet.ts
@@ -475,9 +357,11 @@ loadWalletState: async () => {
 },
 ```
 
-### CLI: Native Push Subscriptions
+### CLI: native push subscriptions
 
-In Node.js scripts using the Wallet SDK, you get true push-based state via RxJS:
+Using the Wallet SDK, you get true push-based state through RxJS.
+
+Build a small helper function. View the full [`transaction-cli.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/lib/transaction-cli.ts) file on GitHub.
 
 ```typescript
 // src/lib/transaction-cli.ts
@@ -500,122 +384,97 @@ export async function waitForWalletSync(ctx: CliWalletContext): Promise<any> {
 }
 ```
 
-The `wallet.state()` observable emits a new `FacadeState` whenever any sub-wallet (shielded, unshielded, or dust) updates. No polling needed.
+Build the flow. View [`test-subscription.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/scripts/test-subscription.ts) for the complete script.
+
+```typescript
+// scripts/test-subscription.ts
+const ctx = await restoreWalletState(MNEMONIC);
+
+// 1. Block until fully synced
+await waitForWalletSync(ctx);
+
+// 2. Subscribe to push updates
+const unsubscribe = subscribeToWalletSdkState(ctx, (state: any) => {
+  if (!state.isSynced) return;
+
+  const shielded = state.shielded?.balances ?? {};
+  const unshielded = state.unshielded?.balances ?? {};
+  const dust = state.dust?.balance(new Date()) ?? 0n;
+
+  console.log('Shielded:', Object.entries(shielded)
+    .map(([k, v]) => `${k.slice(0, 8)}..=${v?.toString()}`).join(', ') || '(empty)');
+  console.log('Unshielded:', Object.entries(unshielded)
+    .map(([k, v]) => `${k.slice(0, 8)}..=${v?.toString()}`).join(', ') || '(empty)');
+  console.log('Dust:', dust.toString());
+});
+```
+
+![CLI push subscription output showing balance updates](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/rwrhbm247kt9ue72espp.png)
 
 ---
 
-## The Browser Transaction Flow (`balanceUnsealedTransaction`)
+## The browser transaction flow (`balanceUnsealedTransaction`)
 
-Once connected, the browser dApp can request the wallet to balance and submit transactions. Our app uses the **manual construction path** — building an `Intent` with an `UnshieldedOffer`, proving it, then calling `balanceUnsealedTransaction`.
+Once connected, the browser DApp requests the wallet to balance and submit the transaction. The app uses **manual construction**: building an `Intent` with an `UnshieldedOffer`, proving it, then calling `balanceUnsealedTransaction`.
 
-### Why Manual Construction?
+The DApp Connector API also exposes `makeTransfer`, a convenience method for simple transfers. This app does not use it because the manual path gives full control over the transaction blueprint and works for both pure transfers and **contract calls**.
 
-The dApp Connector API also exposes `makeTransfer`, a convenience method for simple transfers. We do not use it in this app because the manual path gives full control over the transaction blueprint and works identically for both pure transfers and contract calls.
-
-Here is the actual transfer page:
+Here is the full lifecycle of the transfer page. View the full [`Transfer.tsx`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/pages/Transfer.tsx) file on GitHub.
 
 ```tsx
 // src/pages/Transfer.tsx
-import { useState, useCallback, useEffect } from 'react';
-import { useWalletStore } from '../hooks/useWallet';
-import {
-  Transaction, UnshieldedOffer, Intent, nativeToken, CostModel
-} from '@midnight-ntwrk/ledger-v8';
-import { toHex } from '@midnight-ntwrk/midnight-js-utils';
-import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
+const handleTransfer = useCallback(async () => {
+  if (!connectedApi) {
+    setError('Wallet not connected');
+    return;
+  }
 
-export function TransferPage() {
-  const { isConnected, connectedApi, addresses, balances, loadWalletState } = useWalletStore();
-  const [amount, setAmount] = useState('1');
-  const [recipient, setRecipient] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [txId, setTxId] = useState<string | null>(null);
+  try {
+    const value = BigInt(Math.round(Number(amount) * 1_000_000));
 
-  useEffect(() => {
-    if (isConnected) {
-      loadWalletState();
-      if (addresses?.unshieldedAddress && !recipient) {
-        setRecipient(addresses.unshieldedAddress);
-      }
-    }
-  }, [isConnected, addresses?.unshieldedAddress]);
+    // 1. Decode Bech32 address to raw hex bytes
+    const parsed = MidnightBech32m.parse(recipient);
+    const unshieldedAddr = parsed.decode(UnshieldedAddress, 'preprod');
+    const hexRecipient = unshieldedAddr.data.toString('hex');
 
-  const handleTransfer = useCallback(async () => {
-    if (!connectedApi) {
-      setError('Wallet not connected');
-      return;
-    }
-    if (!recipient || !amount) {
-      setError('Enter recipient and amount');
-      return;
-    }
+    // 2. Build an unproven transaction blueprint manually
+    const unshieldedOffer = UnshieldedOffer.new(
+      [], // inputs — wallet selects these
+      [{ value, owner: hexRecipient, type: nativeToken().raw }],
+      [] // signatures — wallet adds these
+    );
 
-    setStatus('Building transfer...');
-    setError(null);
-    setTxId(null);
+    const intent = Intent.new(new Date(Date.now() + 30 * 60 * 1000));
+    (intent as any).fallibleUnshieldedOffer = unshieldedOffer;
 
-    try {
-      const value = BigInt(Math.round(Number(amount) * 1_000_000));
+    const unsealedTx = Transaction.fromParts('preprod', undefined, undefined, intent as any);
 
-      // 1. Decode Bech32 address to raw hex bytes
-      setStatus('Building transaction...');
-      const parsed = MidnightBech32m.parse(recipient);
-      const unshieldedAddr = parsed.decode(UnshieldedAddress, 'preprod');
-      const hexRecipient = unshieldedAddr.data.toString('hex');
+    // 3. Prove the transaction (PreProof → Proof)
+    const zkConfigProvider = new FetchZkConfigProvider(window.location.origin);
+    const provingProvider = await connectedApi.getProvingProvider(zkConfigProvider);
+    const provenTx = await unsealedTx.prove(provingProvider, CostModel.initialCostModel());
 
-      // 2. Build an unproven transaction blueprint manually
-      const unshieldedOffer = UnshieldedOffer.new(
-        [], // inputs — wallet will select these
-        [{ value, owner: hexRecipient, type: nativeToken().raw }],
-        [] // signatures — wallet will add these
-      );
+    const serializedTx = toHex(provenTx.serialize());
 
-      const intent = Intent.new(new Date(Date.now() + 30 * 60 * 1000));
-      (intent as any).fallibleUnshieldedOffer = unshieldedOffer;
+    // 4. Wallet balances, signs, and pays fees
+    const result = await connectedApi.balanceUnsealedTransaction(serializedTx, { payFees: true });
 
-      const unsealedTx = Transaction.fromParts('preprod', undefined, undefined, intent as any);
+    // 5. Submit
+    await connectedApi.submitTransaction(result.tx);
 
-      // 3. Prove the transaction (PreProof → Proof)
-      setStatus('Proving transaction...');
-      const zkConfigProvider = new FetchZkConfigProvider(window.location.origin);
-      const provingProvider = await connectedApi.getProvingProvider(zkConfigProvider);
-      const provenTx = await unsealedTx.prove(provingProvider, CostModel.initialCostModel());
-
-      const serializedTx = toHex(provenTx.serialize());
-
-      // 4. Wallet balances, signs, and pays fees
-      setStatus('Balancing via wallet...');
-      const result = await connectedApi.balanceUnsealedTransaction(serializedTx, { payFees: true });
-
-      // 5. Submit
-      setStatus('Submitting...');
-      await connectedApi.submitTransaction(result.tx);
-
-      setTxId(result.tx.slice(0, 64));
-      setStatus(null);
-      loadWalletState();
-    } catch (err) {
-      console.error('Transfer error:', err);
-      setError(err instanceof Error ? err.message : String(err));
-      setStatus(null);
-    }
-  }, [connectedApi, recipient, amount, loadWalletState]);
-
-  // ...render form
-}
+    setTxId(result.tx.slice(0, 64));
+    loadWalletState();
+  } catch (err) {
+    setError(err instanceof Error ? err.message : String(err));
+  }
+}, [connectedApi, recipient, amount, loadWalletState]);
 ```
 
-### Why Each Step Matters
+### Why each step matters
 
-**Bech32 → hex:** The dApp connector returns addresses in Bech32 (`mn_addr_preprod1...`), but `UnshieldedOffer.new` expects raw hex bytes for the `owner` field. Passing Bech32 directly causes:
+**Bech32 → hex:** The DApp Connector returns addresses in Bech32 (`mn_addr_preprod1...`), but `UnshieldedOffer.new` expects raw hex bytes for the `owner` field.
 
-```
-Invalid character 'm' at position 0
-```
-
-The correct decode path is:
+The correct flow is:
 
 ```typescript
 const parsed = MidnightBech32m.parse(recipient);
@@ -625,47 +484,40 @@ const hexRecipient = unshieldedAddr.data.toString('hex');
 
 **Network ID:** `Transaction.fromParts` must use `'preprod'` (matching the wallet connection). Using `'undeployed'` causes:
 
-```
+```plaintext
 BALANCE_FAILED: invalid network ID - expect 'preprod' found 'undeployed'
 ```
 
 **`tx.prove()`:** `balanceUnsealedTransaction` expects a transaction with the `Proof` marker. Without `prove()`, the transaction serializes with `proof-preimage` (`PreProof` state) and the wallet rejects it with:
 
-```
+```plaintext
 expected header tag '...proof...', got '...proof-preimage...'
 ```
 
-**Security model:** In the browser flow, **the dApp never sees secret keys**. The wallet extension derives all keys locally and signs intents internally. The dApp only handles public addresses and serialized transaction bytes.
+**Security model:** In the browser flow, **the DApp never sees secret keys**. The wallet extension derives all keys locally and signs intents internally. The DApp only handles public addresses and serialized transaction bytes.
 
 ---
 
-## The CLI Transaction Flow
+## The CLI transaction flow
 
-The CLI path performs transactions without a browser wallet. This is essential for backends, automation scripts, and any service that needs to act autonomously.
+The CLI performs transactions without a browser wallet, which is essential for agents and other systems to act autonomously.
 
-### Key Derivation
+### Key derivation
 
-Derive secret keys directly from a 24-word BIP-39 mnemonic. **Important:** Call `hdWallet.hdWallet.clear()` after derivation to wipe the seed from memory.
+Derive secret keys directly from a 24-word BIP-39 mnemonic. Call `hdWallet.hdWallet.clear()` after derivation to clear the seed from memory.
+
+View the full [`transaction-cli.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/lib/transaction-cli.ts) file on GitHub.
 
 ```typescript
 // src/lib/transaction-cli.ts
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import * as bip39 from '@scure/bip39';
-import { wordlist as english } from '@scure/bip39/wordlists/english';
-
 const seed = Buffer.from(await bip39.mnemonicToSeed(mnemonic));
 const hdWallet = HDWallet.fromSeed(seed);
-
-if (hdWallet.type !== 'seedOk') throw new Error('Failed to initialize HDWallet');
 
 const derivationResult = hdWallet.hdWallet
   .selectAccount(0)
   .selectRoles([Roles.Zswap, Roles.NightExternal, Roles.Dust])
   .deriveKeysAt(0);
 
-if (derivationResult.type !== 'keysDerived') throw new Error('Key derivation failed');
 hdWallet.hdWallet.clear(); // Security: wipe seed from memory
 
 const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(derivationResult.keys[Roles.Zswap]);
@@ -673,17 +525,12 @@ const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.
 const unshieldedKeystore = createKeystore(derivationResult.keys[Roles.NightExternal], 'preprod');
 ```
 
-### Wallet Initialization
+### Wallet initialization
 
-Initialize a headless `WalletFacade` with three sub-wallets. Wallet SDK v3 requires several config fields that were optional in earlier versions:
+Initialize a headless `WalletFacade` with three sub-wallets. Wallet SDK v3 requires several config fields that were optional in previous versions.
 
 ```typescript
 // src/lib/transaction-cli.ts
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { UnshieldedWallet, PublicKey, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-
 const baseConfig: any = {
   networkId: 'preprod',
   indexerClientConnection: {
@@ -718,9 +565,11 @@ Required v3 fields:
 - `PublicKey.fromKeyStore()`: Wraps the unshielded keystore for the wallet
 - `LedgerParameters.initialParameters().dust`: Dust ledger parameters
 
-### CLI Transfer: `transferTransaction` + `signRecipe`
+### CLI transfer: `transferTransaction` + `signRecipe`
 
-For CLI transfers, we use `transferTransaction` (a convenience method on `WalletFacade`) followed by `signRecipe`:
+For CLI transfers, use `transferTransaction` followed by `signRecipe`:
+
+View the full [`test-v3-sync-and-transfer.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/scripts/test-v3-sync-and-transfer.ts) file on GitHub.
 
 ```typescript
 // scripts/test-v3-sync-and-transfer.ts
@@ -752,103 +601,27 @@ const finalized = await ctx.wallet.finalizeRecipe(signedRecipe);
 const txId = await ctx.wallet.submitTransaction(finalized);
 ```
 
-Note: CLI uses `unshieldedToken().raw` (not `nativeToken().raw`) for the token type in `transferTransaction`.
+**Note:** The CLI uses `unshieldedToken().raw` for the token type in `transferTransaction`.
 
-### State Persistence
+### Dust sync handling
 
-Syncing from genesis every time is impractical. Save the serialized state of all three sub-wallets after each run:
-
-```typescript
-// src/lib/transaction-cli.ts
-const STATE_DIR = path.resolve(process.cwd(), '.wallet-state');
-
-export async function saveWalletState(ctx: CliWalletContext, directory = STATE_DIR): Promise<void> {
-  await fs.mkdir(directory, { recursive: true });
-
-  const [shieldedState, unshieldedState, dustState] = await Promise.all([
-    ctx.wallet.shielded.serializeState(),
-    ctx.wallet.unshielded.serializeState(),
-    ctx.wallet.dust.serializeState(),
-  ]);
-
-  await Promise.all([
-    fs.writeFile(path.join(directory, 'shielded.json'), shieldedState, 'utf-8'),
-    fs.writeFile(path.join(directory, 'unshielded.json'), unshieldedState, 'utf-8'),
-    fs.writeFile(path.join(directory, 'dust.json'), dustState, 'utf-8'),
-  ]);
-
-  console.log(`[State] Wallet state saved to ${directory}`);
-}
-```
-
-Restore on startup:
-
-```typescript
-// src/lib/transaction-cli.ts
-export async function restoreWalletState(mnemonic: string, directory = STATE_DIR): Promise<CliWalletContext> {
-  // ...derive keys same as initializeCliWallet...
-
-  try {
-    const [shieldedSerialized, unshieldedSerialized, dustSerialized] = await Promise.all([
-      fs.readFile(path.join(directory, 'shielded.json'), 'utf-8'),
-      fs.readFile(path.join(directory, 'unshielded.json'), 'utf-8'),
-      fs.readFile(path.join(directory, 'dust.json'), 'utf-8'),
-    ]);
-
-    const wallet: any = await (WalletFacade as any).init({
-      configuration: baseConfig,
-      shielded: () => (ShieldedWallet as any)(baseConfig).restore(shieldedSerialized),
-      unshielded: () =>
-        (UnshieldedWallet as any)({ ...baseConfig, txHistoryStorage: new InMemoryTransactionHistoryStorage() })
-          .restore(unshieldedSerialized),
-      dust: () => (DustWallet as any)(baseConfig).restore(dustSerialized),
-    });
-
-    await wallet.start(shieldedSecretKeys, dustSecretKey);
-    console.log('[State] Wallet restored from saved state');
-    return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
-  } catch (err) {
-    console.log('[State] No saved state found or restore failed. Building from scratch...');
-    return initializeCliWallet(mnemonic);
-  }
-}
-```
-
-On the next run, the wallet only syncs the delta (new blocks since the last save), reducing startup from hours to seconds.
-
-### Dust Sync Handling
-
-First-time dust sync from genesis can take hours. We use a 2-hour timeout and a fallback that allows proceeding if dust is "close enough" to the tip:
+First-time dust syncing can take some time (approximately 70 minutes in testing). A 2-hour timeout is used.
 
 ```typescript
 // scripts/test-v3-sync-and-transfer.ts
-const isDustCloseEnough = (s: any, maxGap: bigint = 1000n): boolean => {
-  const dp = s.dust?.progress;
-  if (!dp) return false;
-  const gap = BigInt(Math.abs(Number(dp.highestRelevantWalletIndex - dp.appliedIndex)));
-  return dp.isConnected && gap <= maxGap;
-};
-
 const syncedState = await Rx.firstValueFrom(
   ctx.wallet.state().pipe(
     Rx.throttleTime(5_000),
     Rx.tap((s: any) => {
       // ...log progress...
     }),
-    Rx.filter((s: any) => {
-      if (s.isSynced) return true;
-      const sp = s.shielded?.progress;
-      const up = s.unshielded?.progress;
-      const shieldedDone = sp && BigInt(sp.highestRelevantWalletIndex - sp.appliedIndex) === 0n;
-      const unshieldedDone = up && BigInt(up.highestTransactionId - up.appliedId) === 0n;
-      return shieldedDone && unshieldedDone && isDustCloseEnough(s, 1000n);
-    }),
+    Rx.filter((s: any) => s.isSynced === true),
     Rx.timeout(120 * 60 * 1000), // 2 hours for first-time dust sync
   )
 );
 ```
 
-We also save state on `SIGINT`/`SIGTERM` so progress is not lost if the user interrupts:
+Most importantly, save state on `SIGINT`/`SIGTERM` so progress is not lost if the user interrupts.
 
 ```typescript
 const saveBeforeExit = async () => {
@@ -861,29 +634,27 @@ process.on('SIGINT', saveBeforeExit);
 process.on('SIGTERM', saveBeforeExit);
 ```
 
----
+### Run the CLI transfer script
 
-## `balanceUnsealedTransaction` vs CLI Methods
+```bash
+MNEMONIC="word1 word2 ... word24" npx tsx scripts/test-v3-sync-and-transfer.ts
+```
 
-| Aspect | Browser (dApp Connector) | CLI / Backend |
-|--------|-------------------------|---------------|
-| **Key custody** | Wallet extension (Lace / 1AM) | 24-word mnemonic in script |
-| **Key derivation** | Wallet handles it | `HDWallet.fromSeed()` + `deriveKeysAt()` |
-| **Balancing API** | `balanceUnsealedTransaction` | `transferTransaction` (convenience) |
-| **Manual signing** | Not needed — wallet signs internally | `signRecipe` with `unshieldedKeystore.signData()` |
-| **Proof step** | `tx.prove()` via `getProvingProvider` | Handled inside `transferTransaction` |
-| **Transaction submission** | `connectedApi.submitTransaction(result.tx)` | `wallet.submitTransaction(finalized)` |
-| **Sync model** | Wallet extension syncs internally | `WalletFacade` + RxJS push streams |
-| **State restore** | N/A (extension persists) | `restoreWalletState()` from `.wallet-state/` |
-| **Security boundary** | Keys never leave the extension | Keys in script memory (use env vars) |
+![CLI transfer output showing success](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/epn4x1nka0n5txkd7s5k.png)
 
-### Why Not `balanceUnboundTransaction`?
+**Note:** Sometimes the transfer fails. This is often caused by network issues.
 
-The `WalletFacade` also exposes a lower-level `balanceUnboundTransaction` method for custom transactions that `transferTransaction` cannot express. In this app, we use `transferTransaction` for CLI transfers because it handles the full pipeline (build → prove → balance) in one call. If you need fine-grained control over intent construction in a headless environment, `balanceUnboundTransaction` is available, but you must manually sign intents and handle the proof step yourself — similar to the browser's manual flow, but with your script holding the keys.
+## Conclusion
 
----
+`dapp-connect` is a reference implementation for connecting to the Midnight blockchain from both the browser and the CLI. It demonstrates the complete wallet lifecycle, from detection to connection, state monitoring, and transaction construction, proving, balancing, signing, and submitting, across two different security contexts.
 
-## Common Errors and How to Fix Them
+## Next steps
+
+- Clone the project at [`https://github.com/0xfdbu/midnight-apps/tree/main/dapp-connect`](https://github.com/0xfdbu/midnight-apps/tree/main/dapp-connect)
+- Deploy a compact smart contract and integrate it into the DApp
+- Build an AI agent around the CLI
+
+## Troubleshooting
 
 ### Browser errors
 
@@ -900,56 +671,7 @@ The `WalletFacade` also exposes a lower-level `balanceUnboundTransaction` method
 |-------|-------|-----|
 | `Missing required configuration: 'provingServerUrl'` | `WalletFacade.init` missing proof server URL | Add `provingServerUrl: new URL('http://localhost:6300')` to config |
 | `Custom error: 192` | Missing `signRecipe` step before `finalizeRecipe` | Add `await wallet.signRecipe(recipe, signFn)` before `finalizeRecipe` |
-| `Custom error: 170` | Wallet not fully synced | Wait for `isSynced = true` (or dust within 1k blocks) before submitting |
+| `Custom error: 170` | Wallet not fully synced | Wait for `isSynced = true` before submitting |
 | Dust sync timeout | First-time sync from genesis is slow | Use `restoreWalletState()`; save on SIGINT; allow 2h timeout |
-
----
-
-## Running the Reference Implementation
-
-### Prerequisites
-
-- Node.js v22+
-- Docker (for proof server)
-- A Midnight wallet (1AM or Lace) with Preprod NIGHT tokens
-- 24-word test mnemonic for CLI scripts
-
-### Environment
-
-The app uses these constants:
-
-```typescript
-// src/hooks/wallet.constants.ts
-export const INDEXER_HTTP = 'https://indexer.preprod.midnight.network/api/v4/graphql';
-export const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
-export const PROOF_SERVER = 'http://localhost:6300';
-export const NETWORK_ID = 'preprod';
-```
-
-### Start the Proof Server
-
-```bash
-docker run -p 6300:6300 midnightnetwork/proof-server:8.0.3
-```
-
-### Start the Frontend
-
-```bash
-cd dapp-connect
-npm install
-npm run dev
-```
-
-The app runs at `http://localhost:5173`.
-
-### Run the CLI Transfer Script
-
-```bash
-MNEMONIC="word1 word2 ... word24" npx tsx scripts/test-v3-sync-and-transfer.ts
-```
-
-This restores wallet state from `.wallet-state/` (or syncs from scratch), waits for sync, then submits a 1-unit unshielded self-transfer.
-
----
 
 *Built with `@midnight-ntwrk/midnight-js` 4.0.4 and Wallet SDK 3.0.0 for the Midnight Preprod network.*

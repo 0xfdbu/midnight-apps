@@ -1,10 +1,6 @@
-This is a full guide on how to build an unshielded token DApp with a working frontend.
-
 📁 **Full Source Code:** [midnight-apps/unshielded-token](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
 
 **Target audience:** Developers
-
-Keep it simple and use React + Vite + TypeScript, as it is compatible with most Midnight packages. The first thing you do is set up a basic wallet connection, and for this, make sure to use the latest version of the [DApp connector API](https://docs.midnight.network/api-reference/dapp-connector)
 
 ## Prerequisites
 
@@ -12,10 +8,36 @@ Keep it simple and use React + Vite + TypeScript, as it is compatible with most 
 - A Midnight Wallet (e.g., 1AM or Lace)
 - Some Preprod [faucet](https://faucet.preprod.midnight.network/) NIGHT tokens
 - A [package.json](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token) with the needed packages
+  - `@midnight-ntwrk/compact-runtime`
+  - `@midnight-ntwrk/dapp-connector-api`
+  - `@midnight-ntwrk/ledger-v8`
+  - `@midnight-ntwrk/midnight-js-contracts`
+  - `@midnight-ntwrk/midnight-js-dapp-connector-proof-provider`
+  - `@midnight-ntwrk/midnight-js-fetch-zk-config-provider`
+  - `@midnight-ntwrk/midnight-js-http-client-proof-provider`
+  - `@midnight-ntwrk/midnight-js-indexer-public-data-provider`
+  - `@midnight-ntwrk/midnight-js-level-private-state-provider`
+  - `@midnight-ntwrk/midnight-js-network-id`
+  - `@midnight-ntwrk/midnight-js-node-zk-config-provider`
+  - `@midnight-ntwrk/midnight-js-types`
+  - `@midnight-ntwrk/wallet-sdk-dust-wallet`
+  - `@midnight-ntwrk/wallet-sdk-facade`
+  - `@midnight-ntwrk/wallet-sdk-hd`
+  - `@midnight-ntwrk/wallet-sdk-shielded`
+  - `@midnight-ntwrk/wallet-sdk-unshielded-wallet`
+  - `@scure/bip39`, `react`, `react-dom`, `react-router-dom`, `semver`, `vite-plugin-node-polyfills`, `vite-plugin-top-level-await`, `vite-plugin-wasm`, `ws`, `zustand`
+
 
 ![Wallet connection UI](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/iej2avrvzu0wic5jpmvq.png)
 
-For a detailed walkthrough on setting up a wallet connection with support for multiple wallets, see this [full-stack DApp wallet connection guide](https://dev.to/0xfdbu/tutorial-building-a-full-stack-midnight-dapp-zero-knowledge-attestation-protocol-with-selective-an1). For reference, the official Midnight [React wallet connection guide](https://docs.midnight.network/guides/react-wallet-connect) is also available. Check [useWallet.ts](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/hooks/useWallet.ts) to see how edge cases are handled.
+Clone the [`dapp-connect`](https://github.com/0xfdbu/midnight-apps/tree/main/dapp-connect) project as a starting point. It includes wallet detection, connection, state polling, and the account modal — everything you need before adding smart contract operations.
+
+```bash
+git clone https://github.com/0xfdbu/midnight-apps.git
+cd midnight-apps/dapp-connect
+npm install
+npm run dev
+```
 
 With the frontend ready to connect, the next step is the smart contract side. Here are three core circuits that handle the native mint for the unshielded token vault lifecycle:
 
@@ -66,7 +88,7 @@ export circuit receiveTokens(amount: Uint<128>): [] {
 }
 ```
 
-See full smart contract code [Contract.compact](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/contracts/Contract.compact)
+View the full smart contract code in [`Contract.compact`](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/contracts/Contract.compact) on GitHub.
 
 ---
 
@@ -74,7 +96,7 @@ See full smart contract code [Contract.compact](https://github.com/0xfdbu/midnig
 
 Now compile the smart contract so you can use its artifacts in the frontend (verifiers, provers, ZKIR...).
 
-First install compact dev tools
+First, install the Compact dev tools
 
 ```shell
 curl --proto '=https' --tlsv1.2 -LsSf \
@@ -111,7 +133,7 @@ Now that the smart contract is deployed on Preprod, the next step is to integrat
 
 ## 1. Smart contract operations
 
-You need to make sure the smart contract providers are fully set up
+Set up the smart contract providers
 
 - `privateStateProvider`: uses `levelPrivateStateProvider` for persistent localStorage
 - `publicDataProvider`: reads on-chain state from the indexer
@@ -122,7 +144,7 @@ You need to make sure the smart contract providers are fully set up
 
 > **Note:** In this tutorial, the providers are rebuilt in every function. In a production environment, initialize them once and reuse them across all operations.
 
-The function below covers the full lifecycle of minting into the vault smart contract. You can call `await mintToContract(BigInt(amount))` in the UI to execute it.
+The function below covers the full lifecycle of minting into the vault smart contract. Call `await mintToContract(BigInt(amount))` in the UI to execute it.
 
 It runs through four stages inside a `try/catch`:
 
@@ -230,7 +252,7 @@ const txData = await contract.callTx.mintToContract(amount);
 onSuccess(txData.public.txId);
 ```
 
-> **Note:** The proof generation might take some time before the popup appears. In this example, a local proof server is used at port 6300, so it is fast.
+> **Note:** The proof generation might take some time before the popup appears. This example uses a local proof server at port 6300, so it is fast.
 
 ![Mint transaction success](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/3vow9usvg56pah0kzbw7.png)
 
@@ -255,7 +277,7 @@ export async function encodeUserAddress(bech32Address: string): Promise<Uint8Arr
 }
 ```
 
-This function takes user input and runs it through the helper function `encodeUserAddress(recipient)`. It then calls `store.contractSend(params...)` which invokes the circuit `sendToUser`, which has `sendUnshielded` inside.
+This function takes user input and runs it through `encodeUserAddress(recipient)`. It then calls `store.contractSend(params...)`, which invokes the `sendToUser` circuit containing `sendUnshielded`.
 
 ```typescript
   const handleSend = async () => {
@@ -285,9 +307,9 @@ This function takes user input and runs it through the helper function `encodeUs
 
 ![Send tokens from vault](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/k4vtqnir9kumwovgxe73.png)
 
-Now you can try to deposit the stablecoin token into the vault using `receiveUnshielded`. 
+Now deposit the stablecoin token into the vault using `receiveUnshielded`. 
 
-The frontend has `handleReceive`. It functions similarly to `handleSend`: `store.receiveTokens(params...)` calls the exported circuit `receiveTokens(amount: Uint<128>)`, which has `receiveUnshielded(color, disclose(amount))` inside.
+The frontend has `handleReceive`. It functions similarly to `handleSend`: `store.receiveTokens(params...)` calls the exported `receiveTokens(amount: Uint<128>)` circuit, which contains `receiveUnshielded(color, disclose(amount))`.
 
 ```typescript
    const handleReceive = async () => {
@@ -313,7 +335,7 @@ The frontend has `handleReceive`. It functions similarly to `handleSend`: `store
   };
 ```
 
-> **Note:** `getShieldedAddresses()` is used because it is the most convenient way to retrieve both keys in one call. It returns `shieldedAddress`, `shieldedCoinPublicKey`, and `shieldedEncryptionPublicKey`.
+> **Note:** Use `getShieldedAddresses()` because it retrieves both keys in one call. It returns `shieldedAddress`, `shieldedCoinPublicKey`, and `shieldedEncryptionPublicKey`.
 
 ---
 
@@ -415,7 +437,7 @@ return {
 
 ## 3. Wallet operations
 
-For displaying user receiving addresses and stablecoin balances, see section 2 for details on how to get the user's stablecoin balance.
+For displaying user receiving addresses and stablecoin balances, see section 2.
 
 ```typescript
 const unshieldedAddress = await connectedApi.getUnshieldedAddress();
@@ -467,15 +489,15 @@ export function WalletInfoPage() {
 
 Next, send the stablecoin token between user wallets. The `handleSend` function — different from `contractSend` — looks like this:
 
-```javascript
+```typescript
 const handleSend = async () => {
     if (!amount || !recipient) return;
     await sendStablecoin(recipient, BigInt(amount));
   };
 ```
-`sendStablecoin` is a wrapper built around `connectedApi.makeTransfer`. Instead of sending `nativeToken`, it passes the stablecoin token ID as the `type`, so the wallet knows which asset to transfer. The `makeTransfer` call below is what actually happens inside `sendStablecoin`: it constructs the output we need, balances the transaction, and submits it.
+`sendStablecoin` wraps `connectedApi.makeTransfer`. Instead of sending `nativeToken`, it passes the stablecoin token ID as the `type`, so the wallet knows which asset to transfer. The `makeTransfer` call below is what actually happens inside `sendStablecoin`: it constructs the output we need, balances the transaction, and submits it.
 
-```javascript
+```typescript
       await makeTransfer(
         connectedApi,
         recipient,
@@ -511,7 +533,7 @@ Key differences from `contractSend`
 
 | | **Unshielded** | **Shielded** |
 | --- | --- | --- |
-| Privacy Mechanism | None, completely transparent blockchain transactions | Zero-Knowledge proofs (Zswap) |
+| Privacy mechanism | None — completely transparent blockchain transactions | Zero-knowledge proofs (Zswap) |
 | Legal Compliance | Can be audited for AML | Requires keys for selective disclosure |
 | Use cases | Compliant stablecoins... as required by regulators | Confidential transfers...|
 
@@ -535,18 +557,16 @@ Key differences from `contractSend`
 
 Midnight's multi-modal design is different from other networks that enforce a single model. You are not forced into shielded transactions only, like XMR, or fully transparent ones, like Bitcoin. Instead, you can use whatever fits your use case at the circuit level.
 
-This matters because there may be a need to create a compliant asset, which can vary by jurisdiction and application. An issuer in Europe requires auditability for MiCA compliance, while a healthcare DAO might need shielded balances for GDPR.
-
-So having both of these options on the same chain is extremely important for these organizations, and it is only possible because Midnight lets you mix shielded and unshielded logic in the same network. It is completely permissionless, meaning there is no entity deciding what path or mode your application must use — only you can define the privacy boundary, not the protocol. For developers, this means you can start with unshielded patterns to stay compliant and later add support for shielded actions if regulations change or if you are operating in a different jurisdiction.
+You may need to create a compliant asset, which varies by jurisdiction and application. An issuer in Europe requires auditability for MiCA compliance, while a healthcare DAO might need shielded balances for GDPR.
 
 ## Next steps
 
-Now that you've finished this tutorial, here are a few things you can do next:
+Now that you have finished this tutorial, here are a few things you can do next:
 
-- Check the full repository [source code](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
+- Check the full repository [source code on GitHub](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
 - Read the Midnight Compact language docs
 
 ## Troubleshooting
 
-- **"Wallet not detected"** → Make sure 1AM or Lace browser extensions are installed
-- **Transactions failing** → Make sure you have generated tDUST and that wallet is fully synced
+- **"Wallet not detected"** → Make sure 1AM or Lace browser extensions are installed.
+- **Transactions failing** → Make sure you have tDUST and that the wallet is fully synced.
