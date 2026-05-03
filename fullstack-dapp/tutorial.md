@@ -9,7 +9,7 @@ Within the next few sections, you go through smart contract compilation and focu
 - Node.js installed (v20+)
 - A Midnight Wallet (e.g., 1AM or Lace)
 - Some Preprod [faucet](https://faucet.preprod.midnight.network/) NIGHT tokens
-- A [package.json](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/package.json) with the needed packages
+- A [`package.json`](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/package.json) with the needed packages
   - `@midnight-ntwrk/compact-runtime`
   - `@midnight-ntwrk/dapp-connector-api`
   - `@midnight-ntwrk/ledger-v8`

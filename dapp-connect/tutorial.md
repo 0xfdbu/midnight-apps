@@ -9,17 +9,22 @@ This guide walks through the complete lifecycle of connecting web apps to the Mi
 - Node.js installed (v20+)
 - A Midnight wallet (for example, 1AM or Lace)
 - Some Preprod [faucet](https://faucet.preprod.midnight.network/) NIGHT tokens
-- A [`package.json`](https://github.com/0xfdbu/midnight-apps/blob/main/fullstack-dapp/package.json) with the needed packages:
+- A [`package.json`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/package.json) with the needed packages:
   - `@midnight-ntwrk/dapp-connector-api`
   - `@midnight-ntwrk/ledger-v8`
   - `@midnight-ntwrk/midnight-js-utils`
+  - `@midnight-ntwrk/midnight-js-fetch-zk-config-provider`
+  - `@midnight-ntwrk/midnight-js-network-id`
   - `@midnight-ntwrk/wallet-sdk-address-format`
   - `@midnight-ntwrk/wallet-sdk-facade`
   - `@midnight-ntwrk/wallet-sdk-shielded`
   - `@midnight-ntwrk/wallet-sdk-unshielded-wallet`
   - `@midnight-ntwrk/wallet-sdk-dust-wallet`
   - `@midnight-ntwrk/wallet-sdk-hd`
-  - `zustand`, `rxjs`, `semver`
+  - `@scure/bip39`
+  - `react`, `react-dom`, `react-router-dom`
+  - `zustand`, `rxjs`, `semver`, `ws`
+  - `typescript`, `vite`
 
 ---
 
