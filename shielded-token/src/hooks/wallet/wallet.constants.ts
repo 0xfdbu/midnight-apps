@@ -1,0 +1,10 @@
+export const COMPATIBLE_CONNECTOR_API_VERSION = '4.x';
+export const CONTRACT_PATH = '/src/contracts';
+export const CONTRACT_ADDRESS = '';
+export const INDEXER_HTTP = 'https://indexer.preprod.midnight.network/api/v4/graphql';
+export const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
+export const PROOF_SERVER = 'http://localhost:6300';
+export const PRIVATE_STATE_STORE = 'shielded-token';
+export const PRIVATE_STATE_ID = 'shieldedTokenState';
+export const PRIVATE_STATE_PASSWORD = 'ShieldedToken2026!';
+export const SESSION_CONTRACT_ADDRESS = '0000000000000000000000000000000000000000000000000000000000000000';

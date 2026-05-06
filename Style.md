@@ -1,4 +1,4 @@
-This is a set of instructions used by the agent to format an **existing** none compliant into a compliant one.
+This is a set of instructions used by the agent to format an **existing** none compliant tutorial into a compliant one.
 
 # Tech Content Style Guide
 

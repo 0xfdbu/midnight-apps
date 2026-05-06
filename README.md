@@ -50,6 +50,21 @@ A stablecoin DApp with unshielded token operations. Demonstrates native minting,
 
 ---
 
+### [shielded-token](./shielded-token/)
+
+A privacy-preserving token DApp with shielded token operations. Users can mint, transfer, and burn tokens while keeping all balances and amounts hidden from on-chain observers.
+
+**Features:**
+- Mint shielded tokens with zero-knowledge proofs
+- Send shielded tokens with automatic change management
+- Burn shielded tokens via the burn address
+- Merkle tree validation for freshly minted coins
+- Dashboard with private balance display
+
+**Tech stack:** React + TypeScript + Vite + Midnight SDK
+
+---
+
 ## Getting started
 
 Each app has its own README with setup instructions. Generally:
@@ -67,7 +82,8 @@ midnight-apps/
 ├── README.md           # This file
 ├── dapp-connect/       # Wallet connection reference
 ├── fullstack-dapp/     # ZK attestation protocol
-└── unshielded-token/   # Stablecoin vault DApp
+├── unshielded-token/   # Stablecoin vault DApp
+└── shielded-token/     # Privacy-preserving token DApp
 ```
 
 ## License

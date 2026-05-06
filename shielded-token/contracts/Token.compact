@@ -1,0 +1,66 @@
+pragma language_version 0.22;
+
+import CompactStandardLibrary;
+
+// --- Public ledger state ---
+
+export ledger totalSupply: Uint<64>;
+export ledger totalBurned: Uint<128>;
+
+// --- Witnesses for private/off-chain data ---
+
+witness localNonce(): Bytes<32>;
+
+// --- Minting ---
+
+export circuit createShieldedToken(amount: Uint<64>, recipient: Either<ZswapCoinPublicKey, ContractAddress>): ShieldedCoinInfo {
+    const domain = pad(32, "shielded:token");
+    const nonce = localNonce();
+    // Note: recipient is disclosed to the public ledger (stdlib requirement).
+    const coin = mintShieldedToken(disclose(domain), disclose(amount), disclose(nonce), disclose(recipient));
+    totalSupply = (totalSupply + disclose(amount)) as Uint<64>;
+    return coin;
+}
+
+export circuit nextNonce(index: Uint<128>, currentNonce: Bytes<32>): Bytes<32> {
+    return evolveNonce(disclose(index), disclose(currentNonce));
+}
+
+// --- Atomic mint and send ---
+
+export circuit mintAndSend(amount: Uint<64>, recipient: Either<ZswapCoinPublicKey, ContractAddress>): ShieldedSendResult {
+    const domain = pad(32, "shielded:token");
+    const nonce = localNonce();
+    // Mint to contract first
+    const coin = mintShieldedToken(disclose(domain), disclose(amount), disclose(nonce), right<ZswapCoinPublicKey, ContractAddress>(kernel.self()));
+    // Immediately forward to recipient — no Merkle qualification needed for sendImmediateShielded.
+    // Explicit cast to Uint<128> because sendImmediateShielded expects value: Uint<128>.
+    const result = sendImmediateShielded(disclose(coin), disclose(recipient), disclose(amount) as Uint<128>);
+    totalSupply = (totalSupply + disclose(amount)) as Uint<64>;
+    return result;
+}
+
+// --- Transfers ---
+
+export circuit transferShielded(coin: QualifiedShieldedCoinInfo, recipient: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): ShieldedSendResult {
+    // Note: if amount < coin.value, the leftover change is returned in result.change.
+    // Callers should use exact amounts or inspect ShieldedSendResult.change in the tx result.
+    const result = sendShielded(disclose(coin), disclose(recipient), disclose(amount));
+    return result;
+}
+
+// --- Burning ---
+
+export circuit burnShieldedToken(coin: QualifiedShieldedCoinInfo, amount: Uint<128>): ShieldedSendResult {
+    const burnAddr = shieldedBurnAddress();
+    // Note: if amount < coin.value, leftover change is returned in result.change.
+    const result = sendShielded(disclose(coin), burnAddr, disclose(amount));
+    totalBurned = (totalBurned + disclose(amount)) as Uint<128>;
+    return result;
+}
+
+// --- Deposits ---
+
+export circuit acceptShielded(coin: ShieldedCoinInfo): [] {
+    receiveShielded(disclose(coin));
+}

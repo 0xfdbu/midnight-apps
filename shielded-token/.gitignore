@@ -1,0 +1,20 @@
+# Build outputs
+dist
+*.tsbuildinfo
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+# Deployment artifacts
+deployment.json
+
+# Midnight local state
+midnight-level-db
+
+# Vite
+.vite
+
+# Dependencies (covered by root, but safe to repeat)
+node_modules
