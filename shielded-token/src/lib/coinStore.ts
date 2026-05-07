@@ -45,6 +45,13 @@ export function clearStoredCoins(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+export function updateCoinMtIndex(id: string, mtIndex: string): void {
+  const coins = getStoredCoins().map((c) =>
+    c.id === id ? { ...c, mt_index: mtIndex } : c
+  );
+  saveStoredCoins(coins);
+}
+
 export function coinFromShieldedCoinInfo(
   coin: { nonce: Uint8Array; color: Uint8Array; value: bigint },
   source: StoredCoin['source'],

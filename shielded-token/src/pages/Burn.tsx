@@ -1,28 +1,40 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { callBurnShieldedToken } from '../hooks/wallet/services/api';
 import { hexToUint8Array, uint8ArrayToHex } from '../lib/utils';
-import { getStoredCoins, removeStoredCoin, type StoredCoin } from '../lib/coinStore';
+import { getStoredCoins, removeStoredCoin, saveStoredCoins, type StoredCoin } from '../lib/coinStore';
 
 function formatCoinLabel(coin: StoredCoin): string {
   const shortNonce = coin.nonce.slice(0, 8) + '…' + coin.nonce.slice(-8);
   const mtHint = coin.mt_index ? ` (mt=${coin.mt_index})` : '';
-  return `Coin ${shortNonce} — Value: ${coin.value}${mtHint}`;
+  return `Coin ${shortNonce}${mtHint} — Value: ${coin.value}`;
 }
 
 export function BurnPage() {
   const { isConnected, connectedApi, addresses } = useWalletStore();
   const [selectedCoinId, setSelectedCoinId] = useState<string>('');
   const [amount, setAmount] = useState('');
-  const [mtIndex, setMtIndex] = useState('');
   const [status, setStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+
   const [txHash, setTxHash] = useState<string | null>(null);
   const [changeCoin, setChangeCoin] = useState<StoredCoin | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [storedCoins, setStoredCoins] = useState<StoredCoin[]>(() => getStoredCoins());
+  const selectedCoin = useMemo(() => storedCoins.find((c) => c.id === selectedCoinId) || null, [storedCoins, selectedCoinId]);
 
-  const coins = useMemo(() => getStoredCoins(), []);
-  const selectedCoin = useMemo(() => coins.find((c) => c.id === selectedCoinId) || null, [coins, selectedCoinId]);
+  const [mtIndex, setMtIndex] = useState('');
+
+  // Auto-fill mt_index when a coin with a stored mt_index is selected
+  useEffect(() => {
+    if (selectedCoin?.mt_index) {
+      setMtIndex(selectedCoin.mt_index);
+    } else {
+      setMtIndex('');
+    }
+  }, [selectedCoin]);
+
+
 
   const handleBurn = async () => {
     if (!selectedCoin) {
@@ -37,12 +49,12 @@ export function BurnPage() {
       setError(`Amount exceeds coin value (${selectedCoin.value})`);
       return;
     }
-    if (!mtIndex || parseInt(mtIndex) < 0) {
-      setError('Enter the coin\'s Merkle tree index (required for spending committed coins)');
-      return;
-    }
     if (!connectedApi || !addresses?.shieldedCoinPublicKey) {
       setError('Wallet not connected');
+      return;
+    }
+    if (!mtIndex || parseInt(mtIndex) < 0) {
+      setError('Enter the coin\'s Merkle tree index (mt_index) or use Auto-discover');
       return;
     }
 
@@ -70,8 +82,10 @@ export function BurnPage() {
       setTxHash(txId);
 
       // If the full coin was burned, remove it from storage
+      let updatedCoins = getStoredCoins();
       if (BigInt(amount) >= BigInt(selectedCoin.value)) {
         removeStoredCoin(selectedCoin.id);
+        updatedCoins = updatedCoins.filter((c) => c.id !== selectedCoin.id);
       }
 
       // Capture change if returned
@@ -86,11 +100,12 @@ export function BurnPage() {
           txId,
           createdAt: new Date().toISOString(),
         };
-        const stored = getStoredCoins().filter((c) => c.id !== change.id);
-        stored.push(change);
-        import('../lib/coinStore').then(({ saveStoredCoins }) => saveStoredCoins(stored));
+        updatedCoins = updatedCoins.filter((c) => c.id !== change.id);
+        updatedCoins.push(change);
+        saveStoredCoins(updatedCoins);
         setChangeCoin(change);
       }
+      setStoredCoins(updatedCoins);
 
       setStatus('success');
     } catch (err) {
@@ -120,7 +135,7 @@ export function BurnPage() {
       </div>
 
       <div className="p-6 bg-white/[0.03] border border-white/[0.06] rounded-2xl space-y-5">
-        {coins.length === 0 ? (
+        {storedCoins.length === 0 ? (
           <div className="text-center py-4">
             <p className="text-[13px] text-white/30 mb-2">No stored coins found</p>
             <p className="text-[11px] text-white/20">Mint tokens first. Coin details are saved automatically after minting.</p>
@@ -132,12 +147,12 @@ export function BurnPage() {
               <label className="block text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-2">Select Coin</label>
               <select
                 value={selectedCoinId}
-                onChange={(e) => { setSelectedCoinId(e.target.value); setError(null); }}
+                onChange={(e) => { setSelectedCoinId(e.target.value); setError(null); setMtIndex(''); }}
                 className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors appearance-none"
                 style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center' }}
               >
                 <option value="" className="bg-[#0a0a0a] text-white/50">Choose a coin...</option>
-                {coins.map((coin) => (
+                {storedCoins.map((coin) => (
                   <option key={coin.id} value={coin.id} className="bg-[#0a0a0a] text-white">
                     {formatCoinLabel(coin)}
                   </option>
@@ -152,10 +167,10 @@ export function BurnPage() {
                   <div className="flex justify-between"><span className="text-white/20">Nonce</span> <span className="text-white/50">{selectedCoin.nonce}</span></div>
                   <div className="flex justify-between"><span className="text-white/20">Color</span> <span className="text-white/50">{selectedCoin.color}</span></div>
                   <div className="flex justify-between"><span className="text-white/20">Value</span> <span className="text-white/50">{selectedCoin.value}</span></div>
+                  <div className="flex justify-between"><span className="text-white/20">Source</span> <span className="text-white/50 capitalize">{selectedCoin.source}</span></div>
                   {selectedCoin.mt_index && (
                     <div className="flex justify-between"><span className="text-white/20">Merkle Index</span> <span className="text-white/50">{selectedCoin.mt_index}</span></div>
                   )}
-                  <div className="flex justify-between"><span className="text-white/20">Source</span> <span className="text-white/50 capitalize">{selectedCoin.source}</span></div>
                 </div>
               </div>
             )}
@@ -173,27 +188,24 @@ export function BurnPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium">Merkle Index</label>
-                {selectedCoin?.mt_index && (
-                  <button
-                    onClick={() => setMtIndex(selectedCoin.mt_index!)}
-                    className="text-[10px] text-emerald-400/60 hover:text-emerald-400/90 transition-colors"
-                  >
-                    Auto-fill from stored coin
-                  </button>
-                )}
-              </div>
+              <label className="block text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-2">Merkle Index (mt_index)</label>
               <input
                 type="number"
                 min="0"
                 value={mtIndex}
                 onChange={(e) => { setMtIndex(e.target.value); setError(null); }}
-                placeholder="Enter Merkle tree index (e.g. 1, 2, 3...)"
+                placeholder={selectedCoin?.mt_index ? 'Auto-filled from stored coin' : 'Enter mt_index'}
                 className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15"
               />
-              <p className="text-[11px] text-white/15 mt-1.5">
-                Every committed shielded coin has a Merkle tree index. Required because <code className="text-white/30">sendShielded</code> needs to prove the coin exists on-chain. Index 0 is invalid.
+              {!selectedCoin?.mt_index && (
+                <p className="mt-2 text-[10px] text-amber-400/40">
+                  This coin does not have a stored mt_index. Mint a new coin to have it captured automatically, or enter it manually.
+                </p>
+              )}
+              <p className="mt-2 text-[10px] text-white/15 leading-relaxed">
+                The <code className="text-white/25">mt_index</code> is the coin&apos;s position in the global Merkle tree.
+                It is required for the contract to prove the coin exists on-chain.
+                Coins minted after the update automatically capture this value.
               </p>
             </div>
 
@@ -237,9 +249,9 @@ export function BurnPage() {
 
       <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
         <p className="text-[11px] text-white/20 leading-relaxed">
-          <strong className="text-white/40">How it works:</strong> The <code className="text-white/40">burnShieldedToken</code> circuit calls <code className="text-white/40">sendShielded</code> with the burn address as recipient. 
-          Because the coin is already committed on-chain, the circuit needs <code className="text-white/40">QualifiedShieldedCoinInfo</code> (including <code className="text-white/40">mt_index</code>) to prove Merkle tree inclusion. 
-          Change, if any, is returned via <code className="text-white/40">ShieldedSendResult.change</code>.
+          <strong className="text-white/40">How it works:</strong> The contract uses <code className="text-white/40">sendShielded</code> to spend your coin and send it to the burn address.
+          This requires <code className="text-white/40">QualifiedShieldedCoinInfo</code> including the <code className="text-white/40">mt_index</code> for Merkle tree inclusion proof.
+          Auto-discover scans the chain state to find the correct <code className="text-white/40">mt_index</code>.
         </p>
       </div>
     </div>

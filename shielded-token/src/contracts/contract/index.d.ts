@@ -68,8 +68,35 @@ export type ImpureCircuits<PS> = {
                                                                                      value: bigint
                                                                                    }
                                                                            }>;
-  acceptShielded(context: __compactRuntime.CircuitContext<PS>,
-                 coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint }): __compactRuntime.CircuitResults<PS, []>;
+  depositShielded(context: __compactRuntime.CircuitContext<PS>,
+                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
+                          }): __compactRuntime.CircuitResults<PS, []>;
+  burnByNonce(context: __compactRuntime.CircuitContext<PS>,
+              nonce_0: Uint8Array,
+              amount_0: bigint): __compactRuntime.CircuitResults<PS, { change: { is_some: boolean,
+                                                                                 value: { nonce: Uint8Array,
+                                                                                          color: Uint8Array,
+                                                                                          value: bigint
+                                                                                        }
+                                                                               },
+                                                                       sent: { nonce: Uint8Array,
+                                                                               color: Uint8Array,
+                                                                               value: bigint
+                                                                             }
+                                                                     }>;
+  depositAndBurn(context: __compactRuntime.CircuitContext<PS>,
+                 coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint },
+                 amount_0: bigint): __compactRuntime.CircuitResults<PS, { change: { is_some: boolean,
+                                                                                    value: { nonce: Uint8Array,
+                                                                                             color: Uint8Array,
+                                                                                             value: bigint
+                                                                                           }
+                                                                                  },
+                                                                          sent: { nonce: Uint8Array,
+                                                                                  color: Uint8Array,
+                                                                                  value: bigint
+                                                                                }
+                                                                        }>;
 }
 
 export type ProvableCircuits<PS> = {
@@ -136,8 +163,35 @@ export type ProvableCircuits<PS> = {
                                                                                      value: bigint
                                                                                    }
                                                                            }>;
-  acceptShielded(context: __compactRuntime.CircuitContext<PS>,
-                 coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint }): __compactRuntime.CircuitResults<PS, []>;
+  depositShielded(context: __compactRuntime.CircuitContext<PS>,
+                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
+                          }): __compactRuntime.CircuitResults<PS, []>;
+  burnByNonce(context: __compactRuntime.CircuitContext<PS>,
+              nonce_0: Uint8Array,
+              amount_0: bigint): __compactRuntime.CircuitResults<PS, { change: { is_some: boolean,
+                                                                                 value: { nonce: Uint8Array,
+                                                                                          color: Uint8Array,
+                                                                                          value: bigint
+                                                                                        }
+                                                                               },
+                                                                       sent: { nonce: Uint8Array,
+                                                                               color: Uint8Array,
+                                                                               value: bigint
+                                                                             }
+                                                                     }>;
+  depositAndBurn(context: __compactRuntime.CircuitContext<PS>,
+                 coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint },
+                 amount_0: bigint): __compactRuntime.CircuitResults<PS, { change: { is_some: boolean,
+                                                                                    value: { nonce: Uint8Array,
+                                                                                             color: Uint8Array,
+                                                                                             value: bigint
+                                                                                           }
+                                                                                  },
+                                                                          sent: { nonce: Uint8Array,
+                                                                                  color: Uint8Array,
+                                                                                  value: bigint
+                                                                                }
+                                                                        }>;
 }
 
 export type PureCircuits = {
@@ -211,13 +265,51 @@ export type Circuits<PS> = {
                                                                                      value: bigint
                                                                                    }
                                                                            }>;
-  acceptShielded(context: __compactRuntime.CircuitContext<PS>,
-                 coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint }): __compactRuntime.CircuitResults<PS, []>;
+  depositShielded(context: __compactRuntime.CircuitContext<PS>,
+                  coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint
+                          }): __compactRuntime.CircuitResults<PS, []>;
+  burnByNonce(context: __compactRuntime.CircuitContext<PS>,
+              nonce_0: Uint8Array,
+              amount_0: bigint): __compactRuntime.CircuitResults<PS, { change: { is_some: boolean,
+                                                                                 value: { nonce: Uint8Array,
+                                                                                          color: Uint8Array,
+                                                                                          value: bigint
+                                                                                        }
+                                                                               },
+                                                                       sent: { nonce: Uint8Array,
+                                                                               color: Uint8Array,
+                                                                               value: bigint
+                                                                             }
+                                                                     }>;
+  depositAndBurn(context: __compactRuntime.CircuitContext<PS>,
+                 coin_0: { nonce: Uint8Array, color: Uint8Array, value: bigint },
+                 amount_0: bigint): __compactRuntime.CircuitResults<PS, { change: { is_some: boolean,
+                                                                                    value: { nonce: Uint8Array,
+                                                                                             color: Uint8Array,
+                                                                                             value: bigint
+                                                                                           }
+                                                                                  },
+                                                                          sent: { nonce: Uint8Array,
+                                                                                  color: Uint8Array,
+                                                                                  value: bigint
+                                                                                }
+                                                                        }>;
 }
 
 export type Ledger = {
   readonly totalSupply: bigint;
   readonly totalBurned: bigint;
+  coins: {
+    isEmpty(): boolean;
+    size(): bigint;
+    member(key_0: Uint8Array): boolean;
+    lookup(key_0: Uint8Array): { nonce: Uint8Array,
+                                 color: Uint8Array,
+                                 value: bigint,
+                                 mt_index: bigint
+                               };
+    [Symbol.iterator](): Iterator<[Uint8Array, { nonce: Uint8Array, color: Uint8Array, value: bigint, mt_index: bigint }]>
+  };
 }
 
 export type ContractReferenceLocations = any;

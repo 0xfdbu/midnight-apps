@@ -1,4 +1,4 @@
-pragma language_version 0.22;
+pragma language_version 0.22.0;
 
 import CompactStandardLibrary;
 
@@ -6,6 +6,7 @@ import CompactStandardLibrary;
 
 export ledger totalSupply: Uint<64>;
 export ledger totalBurned: Uint<128>;
+export ledger coins: Map<Bytes<32>, QualifiedShieldedCoinInfo>;
 
 // --- Witnesses for private/off-chain data ---
 
@@ -49,7 +50,7 @@ export circuit transferShielded(coin: QualifiedShieldedCoinInfo, recipient: Eith
     return result;
 }
 
-// --- Burning ---
+// --- Burning (manual mt_index) ---
 
 export circuit burnShieldedToken(coin: QualifiedShieldedCoinInfo, amount: Uint<128>): ShieldedSendResult {
     const burnAddr = shieldedBurnAddress();
@@ -61,6 +62,39 @@ export circuit burnShieldedToken(coin: QualifiedShieldedCoinInfo, amount: Uint<1
 
 // --- Deposits ---
 
-export circuit acceptShielded(coin: ShieldedCoinInfo): [] {
+export circuit depositShielded(coin: ShieldedCoinInfo): [] {
     receiveShielded(disclose(coin));
+    // insertCoin resolves mt_index at runtime by looking up the coin in the ledger.
+    // The coin must have been committed in a previous transaction.
+    coins.insertCoin(
+        disclose(coin.nonce),
+        disclose(coin),
+        right<ZswapCoinPublicKey, ContractAddress>(kernel.self())
+    );
+}
+
+// --- Burn by nonce (from contract storage, no mt_index needed from caller) ---
+
+export circuit burnByNonce(nonce: Bytes<32>, amount: Uint<128>): ShieldedSendResult {
+    assert(coins.member(disclose(nonce)), "Coin not found in contract storage");
+    const coin = coins.lookup(disclose(nonce));
+    const burnAddr = shieldedBurnAddress();
+    const result = sendShielded(disclose(coin), burnAddr, disclose(amount));
+    totalBurned = (totalBurned + disclose(amount)) as Uint<128>;
+    // Remove from storage. Note: if amount < coin.value, change is returned to the
+    // contract but cannot be re-inserted in the same tx (no mt_index yet).
+    coins.remove(disclose(nonce));
+    return result;
+}
+
+// --- Deposit and burn in one transaction (no mt_index needed from caller) ---
+
+export circuit depositAndBurn(coin: ShieldedCoinInfo, amount: Uint<128>): ShieldedSendResult {
+    receiveShielded(disclose(coin));
+    // sendImmediateShielded is used because the coin was received in this transaction.
+    // It does not need mt_index (Merkle qualification) — unlike sendShielded.
+    const burnAddr = shieldedBurnAddress();
+    const result = sendImmediateShielded(disclose(coin), burnAddr, disclose(amount));
+    totalBurned = (totalBurned + disclose(amount)) as Uint<128>;
+    return result;
 }

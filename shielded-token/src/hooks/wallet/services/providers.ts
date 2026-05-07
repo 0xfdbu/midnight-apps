@@ -3,7 +3,7 @@ import type { MidnightProviders } from '@midnight-ntwrk/midnight-js-types';
 import { INDEXER_HTTP, INDEXER_WS, CONTRACT_PATH, PRIVATE_STATE_PASSWORD } from '../wallet.constants';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
-import { ZKConfigProvider } from '@midnight-ntwrk/midnight-js-types';
+import type { ZKConfigProvider } from '@midnight-ntwrk/midnight-js-types';
 import { dappConnectorProofProvider } from '@midnight-ntwrk/midnight-js-dapp-connector-proof-provider';
 import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
 import { toHex, fromHex } from '@midnight-ntwrk/midnight-js-utils';
@@ -65,32 +65,55 @@ export async function buildProviders(
  * wrapper throws instead, letting the caller (wallet or proof server) fall
  * back to its own internal artifact store.
  */
-class ArtifactValidatingProvider extends ZKConfigProvider {
-  constructor(private base: ZKConfigProvider) {
-    super();
+class ArtifactValidatingProvider implements ZKConfigProvider<string> {
+  #base: ZKConfigProvider<string>;
+
+  constructor(base: ZKConfigProvider<string>) {
+    this.#base = base;
   }
 
   async getProverKey(circuitId: string) {
-    const key = await this.base.getProverKey(circuitId);
+    console.log('[ArtifactValidatingProvider] getProverKey', circuitId);
+    const key = await this.#base.getProverKey(circuitId);
     this.validate(key as Uint8Array, `${circuitId}.prover`);
     return key;
   }
 
   async getVerifierKey(circuitId: string) {
-    const key = await this.base.getVerifierKey(circuitId);
+    console.log('[ArtifactValidatingProvider] getVerifierKey', circuitId);
+    const key = await this.#base.getVerifierKey(circuitId);
     this.validate(key as Uint8Array, `${circuitId}.verifier`);
     return key;
   }
 
   async getZKIR(circuitId: string) {
-    const zkir = await this.base.getZKIR(circuitId);
+    console.log('[ArtifactValidatingProvider] getZKIR', circuitId);
+    const zkir = await this.#base.getZKIR(circuitId);
     this.validate(zkir as Uint8Array, `${circuitId}.bzkir`);
     return zkir;
   }
 
+  getVerifierKeys(circuitIds: string[]) {
+    return this.#base.getVerifierKeys(circuitIds);
+  }
+
+  async get(circuitId: string) {
+    console.log('[ArtifactValidatingProvider] get', circuitId);
+    const config = await this.#base.get(circuitId);
+    this.validate(config.zkir as Uint8Array, `${circuitId}.bzkir`);
+    this.validate(config.proverKey as Uint8Array, `${circuitId}.prover`);
+    this.validate(config.verifierKey as Uint8Array, `${circuitId}.verifier`);
+    return config;
+  }
+
+  asKeyMaterialProvider() {
+    return this;
+  }
+
   private validate(data: Uint8Array, name: string) {
-    if (data && data.length > 0 && data.length < 5000) {
-      const start = new TextDecoder().decode(data.slice(0, 50)).toLowerCase();
+    if (data && data.length > 0) {
+      const sampleSize = Math.min(data.length, 200);
+      const start = new TextDecoder().decode(data.slice(0, sampleSize)).toLowerCase();
       if (start.includes('<!doctype') || start.includes('<html')) {
         throw new Error(
           `Artifact ${name} is HTML (file missing or Vite SPA fallback). ` +
