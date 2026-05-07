@@ -13,10 +13,18 @@
 - The smart contract compiled so its JS bindings exist (e.g., `/contracts/managed/<name>/contract/index.js`)
 - `INDEXER_HTTP` and `INDEXER_WS` constants pointing to the Preprod indexer
 - A [`package.json`](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/package.json) with the needed packages:
-  - `@midnight-ntwrk/midnight-js-indexer-public-data-provider`
-  - `@midnight-ntwrk/midnight-js-contracts`
-  - `@midnight-ntwrk/midnight-js-types`
-  - `@midnight-ntwrk/compact-runtime`
+  - `@midnight-ntwrk/midnight-js-indexer-public-data-provider` — GraphQL queries and WebSocket subscriptions
+  - `@midnight-ntwrk/midnight-js-contracts` — `findDeployedContract` and `deployContract`
+  - `@midnight-ntwrk/midnight-js-types` — `PublicDataProvider`, `WalletProvider`, `MidnightProvider` interfaces
+  - `@midnight-ntwrk/compact-runtime` — `ledger()` deserialization
+  - `@midnight-ntwrk/dapp-connector-api` — `ConnectedAPI` for wallet balances and transaction submission
+  - `@midnight-ntwrk/ledger-v8` — `Transaction`, `ZswapChainState`, `LedgerParameters`
+  - `@midnight-ntwrk/midnight-js-fetch-zk-config-provider` — ZK config loading
+  - `@midnight-ntwrk/midnight-js-http-client-proof-provider` — proof server client
+  - `@midnight-ntwrk/midnight-js-level-private-state-provider` — persistent private state storage
+  - `@midnight-ntwrk/midnight-js-network-id` — `setNetworkId('preprod')`
+  - `react`, `react-dom`, `react-router-dom` — UI framework
+  - `zustand` — state management
 
 ## Summary
 
