@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { ConnectButton } from '../components/ui/ConnectButton';
-import { getContractState, getContractBalance, getUserStablecoinBalance } from '../hooks/wallet/services/contractCalls';
+import { useContractState } from '../hooks/useContractState';
 
 // --- Icons ---
 function GithubIcon({ className }: { className?: string }) {
@@ -32,32 +31,12 @@ function ChevronRightIcon({ className }: { className?: string }) {
 
 export function HomePage() {
   const { isConnected, connectedApi } = useWalletStore();
-  const [totalSupply, setTotalSupply] = useState<bigint>(0n);
-  const [totalBurned, setTotalBurned] = useState<bigint>(0n);
-  const [contractBalance, setContractBalance] = useState<bigint>(0n);
-  const [walletBalance, setWalletBalance] = useState<bigint>(0n);
+  const { state } = useContractState(connectedApi, { pollInterval: 15000 });
 
-  useEffect(() => {
-    if (!isConnected || !connectedApi) return;
-    
-    const fetchData = async () => {
-      try {
-        const [state, cb, wb] = await Promise.all([
-          getContractState(),
-          getContractBalance(),
-          getUserStablecoinBalance(connectedApi)
-        ]);
-        setTotalSupply(state.totalSupply);
-        setTotalBurned(state.totalBurned);
-        setContractBalance(cb);
-        setWalletBalance(wb);
-      } catch (err) {
-        console.error('[Dashboard] Error fetching data:', err);
-      }
-    };
-
-    fetchData();
-  }, [isConnected, connectedApi]);
+  const totalSupply = state?.totalSupply ?? 0n;
+  const totalBurned = state?.totalBurned ?? 0n;
+  const contractBalance = state?.contractBalance ?? 0n;
+  const walletBalance = state?.walletBalance ?? 0n;
 
   return (
     <div className="w-full max-w-4xl mx-auto">
