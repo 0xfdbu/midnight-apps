@@ -59,12 +59,19 @@ export async function getContractState(): Promise<ContractState> {
 
     console.log('[ContractState] Ledger totalSupply:', ledgerState.totalSupply.toString());
     console.log('[ContractState] Ledger totalBurned:', ledgerState.totalBurned.toString());
-    console.log('[ContractState] Ledger burnedBalance:', ledgerState.burnedBalance?.toString() ?? '0');
+
+    let burnedBalance = 0n;
+    try {
+      burnedBalance = ledgerState.burnedBalance ?? 0n;
+      console.log('[ContractState] Ledger burnedBalance:', burnedBalance.toString());
+    } catch {
+      console.log('[ContractState] Ledger burnedBalance: not available (old contract)');
+    }
 
     return {
       totalSupply: ledgerState.totalSupply,
       totalBurned: ledgerState.totalBurned,
-      burnedBalance: ledgerState.burnedBalance ?? 0n,
+      burnedBalance,
     };
   } catch (err) {
     console.error('[ContractState] Error:', err);
