@@ -45,6 +45,7 @@ export type Circuits<PS> = {
 export type Ledger = {
   readonly totalSupply: bigint;
   readonly totalBurned: bigint;
+  readonly burnedBalance: bigint;
 }
 
 export type ContractReferenceLocations = any;
