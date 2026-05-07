@@ -37,6 +37,7 @@ const STORAGE_PASSWORD = 'TokenTransfer-2026!#MidnightApp';
 export interface ContractState {
   totalSupply: bigint;
   totalBurned: bigint;
+  burnedBalance: bigint;
 }
 
 export async function getContractState(): Promise<ContractState> {
@@ -50,24 +51,26 @@ export async function getContractState(): Promise<ContractState> {
     const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
     if (!contractState) {
       console.log('[ContractState] No contract state found');
-      return { totalSupply: 0n, totalBurned: 0n };
+      return { totalSupply: 0n, totalBurned: 0n, burnedBalance: 0n };
     }
 
     const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
     const ledgerState = contractModule.ledger(contractState.data);
-    
+
     console.log('[ContractState] Ledger totalSupply:', ledgerState.totalSupply.toString());
     console.log('[ContractState] Ledger totalBurned:', ledgerState.totalBurned.toString());
-    
+    console.log('[ContractState] Ledger burnedBalance:', ledgerState.burnedBalance?.toString() ?? '0');
+
     return {
       totalSupply: ledgerState.totalSupply,
       totalBurned: ledgerState.totalBurned,
+      burnedBalance: ledgerState.burnedBalance ?? 0n,
     };
   } catch (err) {
     console.error('[ContractState] Error:', err);
     console.error('[ContractState] Error message:', err instanceof Error ? err.message : String(err));
     console.error('[ContractState] Error stack:', err instanceof Error ? err.stack : '');
-    return { totalSupply: 0n, totalBurned: 0n };
+    return { totalSupply: 0n, totalBurned: 0n, burnedBalance: 0n };
   }
 }
 

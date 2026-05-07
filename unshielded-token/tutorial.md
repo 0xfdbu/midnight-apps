@@ -117,6 +117,13 @@ If you do decide to recompile and redeploy, run:
 MNEMONIC="24 secret seed phrase from Lace or 1AM" npx tsx scripts/go.ts
 ```
 
+Another simple alternative to save on time of wallet syncing by using your existing wallet extension state, View [Deploy.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/pages/Deploy.tsx) (Highly recommended)
+
+
+![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/u84bdf1t71eghhip6i6o.png)
+
+**Disclaimer:** This demonstration uses a smart contract where anybody can mint so do not use for production without proper authentication.
+
 ---
 
 ## Frontend integration
@@ -430,7 +437,8 @@ const ledgerState = contractModule.ledger(contractState.data);
 
 ```typescript
 return {
-  totalSupply: ledgerState.totalSupply
+  totalSupply: ledgerState.totalSupply,
+  totalBurned: ledgerState.totalBurned,
 };
 ```
 
@@ -556,15 +564,13 @@ Key differences from `contractSend`
 
 Midnight's multi-modal design is different from other networks that enforce a single model. You are not forced into shielded transactions only, like XMR, or fully transparent ones, like Bitcoin. Instead, you can use whatever fits your use case at the circuit level.
 
-You may need to create a compliant asset, which varies by jurisdiction and application. An issuer in Europe requires auditability for MiCA compliance, while a healthcare DAO might need shielded balances for GDPR.
-
 ## Next steps
 
 Now that you have finished this tutorial, here are a few things you can do next:
 
 - Check the full repository [source code on GitHub](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
 - Read the Midnight Compact language docs
-- Add admin only vault management (Whitelist style)
+- Add authentication / whitelist for mint
 
 ## Troubleshooting
 

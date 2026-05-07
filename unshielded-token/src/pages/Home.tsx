@@ -35,6 +35,7 @@ export function HomePage() {
 
   const totalSupply = state?.totalSupply ?? 0n;
   const totalBurned = state?.totalBurned ?? 0n;
+  const burnedBalance = state?.burnedBalance ?? 0n;
   const contractBalance = state?.contractBalance ?? 0n;
   const walletBalance = state?.walletBalance ?? 0n;
 
@@ -123,8 +124,11 @@ export function HomePage() {
               <p className="text-xl font-semibold text-white">{totalBurned.toString()}</p>
             </div>
             <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
-              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Contract Balance</p>
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Vault Balance</p>
               <p className="text-xl font-semibold text-white">{contractBalance.toString()}</p>
+              {burnedBalance > 0n && (
+                <p className="text-[10px] text-text-muted/40 mt-1">{burnedBalance.toString()} burned held</p>
+              )}
             </div>
             <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
               <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Wallet Balance</p>

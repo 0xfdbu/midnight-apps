@@ -13,6 +13,7 @@ import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 export interface ContractStateSnapshot {
   totalSupply: bigint;
   totalBurned: bigint;
+  burnedBalance: bigint;
   contractBalance: bigint;
   walletBalance: bigint;
   blockHeight?: number;
@@ -36,10 +37,13 @@ export function useContractState(
         getContractBalance(),
         connectedApi ? getUserStablecoinBalance(connectedApi) : Promise.resolve(0n),
       ]);
+      // Usable contract balance = raw balance minus tokens that were burned into the contract
+      const usableContractBalance = cb > s.burnedBalance ? cb - s.burnedBalance : 0n;
       setState({
         totalSupply: s.totalSupply,
         totalBurned: s.totalBurned,
-        contractBalance: cb,
+        burnedBalance: s.burnedBalance,
+        contractBalance: usableContractBalance,
         walletBalance: wb,
       });
       setError(null);

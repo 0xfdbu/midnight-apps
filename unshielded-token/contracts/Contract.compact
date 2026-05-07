@@ -4,6 +4,7 @@ import CompactStandardLibrary;
 
 export ledger totalSupply: Uint<64>;
 export ledger totalBurned: Uint<64>;
+export ledger burnedBalance: Uint<64>;
 
 // Mint tokens directly into the contract's own balance
 export circuit mintToContract(amount: Uint<64>): Bytes<32> {
@@ -47,12 +48,15 @@ export circuit receiveTokens(amount: Uint<128>): [] {
     receiveUnshielded(color, disclose(amount));
 }
 
-// Burn tokens by depositing them into the contract (permanently removing from circulation)
-// Uses Uint<64> to enforce safe cast at compile time
+// Burn tokens by depositing them into the contract.
+// In the unshielded token model, tokens cannot be destroyed — they are moved
+// to the contract and tracked separately in burnedBalance.
+// Uses Uint<64> to enforce safe cast at compile time.
 export circuit burnStablecoin(amount: Uint<64>): [] {
     const domain = pad(32, "stablecoin:usd");
     const color = tokenType(disclose(domain), kernel.self());
     receiveUnshielded(color, disclose(amount) as Uint<128>);
     totalSupply = totalSupply - disclose(amount) as Uint<64>;
     totalBurned = totalBurned + disclose(amount) as Uint<64>;
+    burnedBalance = burnedBalance + disclose(amount) as Uint<64>;
 }
