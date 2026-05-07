@@ -109,7 +109,7 @@ Then compile
 compact compile contracts/Contract.compact contracts/managed/stablecoin
 ```
 
-> **Note:** Skip this step if you want to clone the [repo](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable by the frontend. A smart contract is already deployed on Preprod: `db5d7cb3ed5ab23217abedb86831f6f5b23a9179e91e48dab88d819ef41b8e6d`
+> **Note:** Skip this step if you want to clone the [repo](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable by the frontend. A smart contract is already deployed on Preprod: `0c0ad6d96daa1b983751db2149a093c34ea73714c33fbad40d291d9e887f8084`
 
 If you do decide to recompile and redeploy, run:
 
@@ -117,7 +117,7 @@ If you do decide to recompile and redeploy, run:
 MNEMONIC="24 secret seed phrase from Lace or 1AM" npx tsx scripts/go.ts
 ```
 
-Another simple alternative to save on time of wallet syncing by using your existing wallet extension state, View [Deploy.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/pages/Deploy.tsx) (Highly recommended)
+A simple approach to quickly deploy and save time of wallet syncing by using your existing wallet extension state, View [Deploy.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/pages/Deploy.tsx) (Highly recommended)
 
 
 ![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/u84bdf1t71eghhip6i6o.png)
