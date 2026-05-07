@@ -1,1 +1,0 @@
-var e,t=t=>{e=t},n=()=>{if(e===void 0)throw Error(`Network ID has not been configured. Call setNetworkId() before any wallet or contract operation.`);return e};export{t as n,n as t};

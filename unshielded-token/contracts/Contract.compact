@@ -47,11 +47,12 @@ export circuit receiveTokens(amount: Uint<128>): [] {
     receiveUnshielded(color, disclose(amount));
 }
 
-// Burn tokens by depositing them into the contract (removing from user circulation)
+// Burn tokens by depositing them into the contract (permanently removing from circulation)
 // Uses Uint<64> to enforce safe cast at compile time
 export circuit burnStablecoin(amount: Uint<64>): [] {
     const domain = pad(32, "stablecoin:usd");
     const color = tokenType(disclose(domain), kernel.self());
     receiveUnshielded(color, disclose(amount) as Uint<128>);
+    totalSupply = totalSupply - disclose(amount) as Uint<64>;
     totalBurned = totalBurned + disclose(amount) as Uint<64>;
 }

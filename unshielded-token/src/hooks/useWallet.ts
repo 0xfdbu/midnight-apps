@@ -10,6 +10,7 @@ import type { WalletAddresses, WalletBalances } from './wallet/wallet.types';
 import { isWalletError, handleWalletError, extractNodeError } from './wallet/wallet.utils';
 import {
   mintToContract,
+  burnFromContract,
   receiveTokens,
   sendToUser,
 } from './wallet/services/contractCalls';
@@ -49,6 +50,7 @@ export interface WalletState {
   loadWalletState: () => Promise<void>;
   makeTransfer: (recipient: string, amount: bigint) => Promise<void>;
   mintToContract: (amount: bigint) => Promise<void>;
+  burnFromContract: (amount: bigint) => Promise<void>;
   sendStablecoin: (recipient: string, amount: bigint) => Promise<void>;
   receiveTokens: (
     connectedApi: ConnectedAPI,
@@ -244,6 +246,54 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       );
     } catch (err) {
       console.error('Mint error:', err);
+      if (isWalletError(err) && err.code === 'Disconnected') {
+        useWalletStore.getState().resetConnection();
+        setError('Wallet disconnected. Please reconnect.');
+      } else {
+        setError(extractNodeError(err));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  },
+
+  burnFromContract: async (amount) => {
+    const { connectedApi, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
+    if (!connectedApi) {
+      setError('Not connected');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+    setTransactionHash(null);
+
+    try {
+      const isConnected = await checkConnectionStatus(connectedApi);
+      if (!isConnected) {
+        useWalletStore.getState().resetConnection();
+        setError('Wallet disconnected. Please reconnect.');
+        return;
+      }
+
+      const shieldedAddresses = await connectedApi.getShieldedAddresses();
+      const coinPublicKey = shieldedAddresses.shieldedCoinPublicKey;
+
+      await burnFromContract(
+        connectedApi,
+        coinPublicKey,
+        shieldedAddresses,
+        amount,
+        (txId: string) => {
+          setTransactionHash(txId);
+          loadWalletState();
+        },
+        (errMsg: string) => {
+          setError(errMsg.length > 100 ? errMsg.substring(0, 100) + '...' : errMsg);
+        }
+      );
+    } catch (err) {
+      console.error('Burn error:', err);
       if (isWalletError(err) && err.code === 'Disconnected') {
         useWalletStore.getState().resetConnection();
         setError('Wallet disconnected. Please reconnect.');

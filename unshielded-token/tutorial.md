@@ -430,8 +430,7 @@ const ledgerState = contractModule.ledger(contractState.data);
 
 ```typescript
 return {
-  totalSupply: ledgerState.totalSupply,
-  totalBurned: ledgerState.totalBurned,
+  totalSupply: ledgerState.totalSupply
 };
 ```
 
@@ -565,6 +564,7 @@ Now that you have finished this tutorial, here are a few things you can do next:
 
 - Check the full repository [source code on GitHub](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
 - Read the Midnight Compact language docs
+- Add admin only vault management (Whitelist style)
 
 ## Troubleshooting
 
