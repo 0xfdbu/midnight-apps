@@ -1,6 +1,6 @@
 export const COMPATIBLE_CONNECTOR_API_VERSION = '4.x';
 export const NATIVE_TOKEN_TYPE = '00';
-export const STABLECOIN_TOKEN = '11935c931d3c2704c8730b5da7538ad274e63f3214d78f9ac32949a2fc9c9458';
+export const STABLECOIN_TOKEN = '855df55d75732c518cf7b3ad8bf9a8097400c0542189b5295da1151f79418f89';
 export const CONTRACT_PATH = '/contracts/managed/stablecoin';
 export const CONTRACT_ADDRESS = '95c4e6387fd2f9f78dea520307347eed6854e868fe3075d2c06bf44d78cecec5';
 export const INDEXER_HTTP = 'https://indexer.preprod.midnight.network/api/v4/graphql';
