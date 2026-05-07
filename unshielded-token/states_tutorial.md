@@ -26,12 +26,12 @@ By the end, you will have a reusable `useContractState` hook that keeps your UI 
 
 ## Understanding the contract ledger
 
-Before querying anything, it helps to know what you are actually querying. A Midnight contract has two separate on-chain data sources:
+Before querying anything, it helps to know what you are actually querying. The indexer returns a `ContractState` object that contains two distinct properties you care about for display:
 
-| Data source | What's inside | How you access it |
+| Property | What's inside | How you access it |
 |---|---|---|
-| **Ledger state** (`data`) | Typed fields declared with `export ledger` in Compact | `contractModule.ledger(contractState.data)` |
-| **Contract balance** (`balance`) | A `Map<TokenType, bigint>` of unshielded tokens held by the contract | `contractState.balance` directly |
+| **`data`** | The raw bytes of the contract's primary state, including typed fields declared with `export ledger` in Compact | `contractModule.ledger(contractState.data)` |
+| **`balance`** | A `Map<TokenType, bigint>` of unshielded tokens held by the contract | `contractState.balance` directly |
 
 The ledger is defined in your `.compact` file. For the example contract used in this tutorial, the ledger looks like this:
 
