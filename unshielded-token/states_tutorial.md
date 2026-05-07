@@ -44,7 +44,7 @@ export ledger totalBurned: Uint<64>;
 export ledger burnedBalance: Uint<64>;
 ```
 
-When `compactc` compiles this, it generates a JavaScript `ledger()` constructor that knows exactly how to deserialize the raw bytes into those three typed fields. The resulting object gives you plain `bigint` values:
+When `compactc` compiles this, it generates a JavaScript `ledger()` constructor that knows exactly how to deserialize the raw bytes into those three typed fields. The library responsible for this deserialization is `@midnight-ntwrk/compact-runtime`. The resulting object gives you plain `bigint` values:
 
 ```typescript
 const ledgerState = contractModule.ledger(contractState.data);
@@ -149,7 +149,7 @@ const historical = await provider.queryContractState(CONTRACT_ADDRESS, {
 
 ## 3. Reading wallet balances
 
-Before displaying the full dashboard, you also need the user's wallet balance. The DApp Connector API exposes `getUnshieldedBalances()`, which returns a record mapping token color strings to amounts.
+Before displaying the full dashboard, you also need the user's wallet balance. The `@midnight-ntwrk/dapp-connector-api` package exposes `getUnshieldedBalances()` on the `ConnectedAPI`, which returns a record mapping token color strings to amounts.
 
 ```typescript
 export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Promise<bigint> {
@@ -222,6 +222,8 @@ for (const [key, value] of contractState.balance.entries()) {
 ---
 
 ## 6. Putting it together: `getContractState` and `getContractBalance`
+
+The `@midnight-ntwrk/midnight-js-indexer-public-data-provider` package gives you the `indexerPublicDataProvider`, and `@midnight-ntwrk/compact-runtime` gives you the `ledger()` deserializer. Here is how they fit together in the actual project.
 
 The project already implements the above patterns in `src/hooks/wallet/services/contractCalls.ts`. Here is the actual `getContractState` helper:
 
@@ -409,7 +411,7 @@ const unsubscribe = subscribeToContractActions(CONTRACT_ADDRESS, (action) => {
 
 ### A complete `useContractState` hook
 
-The project implements this in `src/hooks/useContractState.ts`. Here is the full hook that combines polling with a WebSocket subscription. It falls back to polling every 15 seconds if the subscription is not enabled or disconnects.
+The project implements this in `src/hooks/useContractState.ts`. It imports `ConnectedAPI` from `@midnight-ntwrk/dapp-connector-api` for the wallet interface, and uses raw `WebSocket` against the indexer for push updates. Here is the full hook that combines polling with a WebSocket subscription. It falls back to polling every 15 seconds if the subscription is not enabled or disconnects.
 
 ```typescript
 import { useState, useEffect, useRef, useCallback } from 'react';
