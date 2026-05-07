@@ -389,7 +389,9 @@ export async function sendToUser(
 export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Promise<bigint> {
   try {
     const balances = await connectedApi.getUnshieldedBalances();
+    console.log('[getUserStablecoinBalance] Raw balances:', balances);
     const stablecoinBalance = balances[STABLECOIN_TOKEN];
+    console.log('[getUserStablecoinBalance] STABLECOIN_TOKEN:', STABLECOIN_TOKEN, '=>', stablecoinBalance?.toString() ?? '0');
     return stablecoinBalance || 0n;
   } catch (err) {
     console.error('[getUserStablecoinBalance] Error:', err);
