@@ -1,5 +1,3 @@
-# Query and visualize smart contract state
-
 📁 **Full Source Code:** [midnight-apps/unshielded-token](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
 
 **Target audience:** Developers
@@ -30,7 +28,7 @@
 
 This guide shows how to query and visualize deployed smart contract state from a React frontend on the Midnight network. You will learn how to use `indexerPublicDataProvider` for GraphQL queries, how to deserialize raw ledger bytes into typed fields, and how to render everything in the frontend.
 
-You will have a reusable `useContractState` hook that keeps your frontend in sync with on-chain state, whether you prefer polling or push-based subscriptions on the WebSocket. This works with any smart contract that you have previously deployed; the example presented below is an unshielded stablecoin vault, but the patterns apply to any Midnight DApp needing to display on-chain data.
+You have a reusable `useContractState` hook that keeps your frontend in sync with on-chain state, whether you prefer polling or push-based subscriptions over WebSocket. This works with any smart contract that you have previously deployed; the example presented below is an unshielded stablecoin vault, but the patterns apply to any Midnight DApp needing to display on-chain data.
 
 ---
 
@@ -56,7 +54,7 @@ export ledger totalBurned: Uint<64>;
 export ledger burnedBalance: Uint<64>;
 ```
 
-When you compile the smart contract, it generates a JavaScript `ledger()` constructor that knows exactly how to deserialize the raw bytes into those three typed fields. The library responsible for the deserialization is `@midnight-ntwrk/compact-runtime`, and the result comes in plain `bigint` values.
+When you compile the smart contract, it generates a JavaScript `ledger()` constructor that knows exactly how to deserialize the raw bytes into those three typed fields. The library responsible for the deserialization is `@midnight-ntwrk/compact-runtime`, and the results are plain `bigint` values.
 
 ```typescript
 const ledgerState = contractModule.ledger(contractState.data);
@@ -70,7 +68,7 @@ const ledgerState = contractModule.ledger(contractState.data);
 
 ## 1. The indexer provider
 
-`@midnight-ntwrk/midnight-js-indexer-public-data-provider` exports `indexerPublicDataProvider`, which wraps an Apollo Client around the Indexer's GraphQL endpoint. It implements the `PublicDataProvider` interface and gives you typed methods for querying chain data.
+`@midnight-ntwrk/midnight-js-indexer-public-data-provider` has an export `indexerPublicDataProvider` it wraps an Apollo Client around the indexer's GraphQL V4 endpoint. It implements `PublicDataProvider` interface and gives you typed methods for querying chain data.
 
 ```typescript
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
@@ -85,11 +83,11 @@ The provider contains three useful methods for querying smart contract state:
 
 | Method | Returns | Use when |
 |---|---|---|
-| `queryContractState(address)` | `ContractState \| null` | You only need the smart contract's public ledger data |
-| `queryZSwapAndContractState(address)` | `[ZswapChainState, ContractState, LedgerParameters] \| null` | You also need the global shielded state or parameters |
-| `queryUnshieldedBalances(address)` | `UnshieldedBalances \| null` | You only need the smart contract's native token balances |
+| `queryContractState(address)` | `ContractState` | You only need the smart contract's public ledger data |
+| `queryZSwapAndContractState(address)` | `[ZswapChainState, ContractState, LedgerParameters]` | You also need the global shielded state or parameters |
+| `queryUnshieldedBalances(address)` | `UnshieldedBalances` | You only need the smart contract's native token balances |
 
-All three accept an optional second argument to query at a specific block height or hash. If omitted, the latest state is returned.
+All three `queryContractState(address)` `queryZSwapAndContractState(address)` `queryUnshieldedBalances(address)` accept an optional second argument to query at a specific block height or hash. If omitted, the latest state is returned.
 
 ---
 
@@ -98,6 +96,8 @@ All three accept an optional second argument to query at a specific block height
 ### Querying raw smart contract state
 
 A simple entry point is `queryContractState`. It returns `null` immediately if the indexer has never seen the smart contract.
+
+`queryContractState` works well if you need the smart contract's public ledger data.
 
 ```typescript
 export async function getContractBalance(): Promise<bigint> {
@@ -130,7 +130,7 @@ export async function getContractBalance(): Promise<bigint> {
 
 ![Console output showing contract state balance logs](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/9u5v6y8fszo4xrjtv925.png)
 
-`contractState.balance` is a `Map<TokenType, bigint>` of token balances held by the smart contract. This is useful for a vault type of smart contract.
+`contractState.balance` is a `Map<TokenType, bigint>` of token balances held by the smart contract. This is useful for a vault-type smart contract.
 
 ### Querying combined ZSwap + smart contract state
 
@@ -207,13 +207,24 @@ export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Prom
 
 ![Console output showing user wallet token balances](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/o7gnnkibfep6pip8adtq.png)
 
-Your wallet has many tokens. `0000...` means native tNIGHT. This is easier than querying the smart contract state because the wallet already knows its balances. You just look up the key matching your token color.
+Your wallet holds many tokens. `0000...` represents native tNIGHT. Looking up wallet balances is easier than querying the smart contract state because the wallet already tracks its own balances. You simply look up the key matching your token color.
+
+### Where do token colors come from?
+
+Every token on Midnight has a unique color: a 32-byte hex string that identifies the token type on the ledger. You can see this color in the `[getUserStablecoinBalance] Raw balances:` log. The color is generated when the token is first minted, and it is not hardcoded in the smart contract source code.
+
+If you do not know the color yet, inspect the vault's `ContractState` balance map after at least one mint transaction has occurred. Store the color in a constant, and reuse it for balance lookups:
+
+```typescript
+export const STABLECOIN_TOKEN =
+  '88aca75e4dfebf5991aee89918528338809dacb71d62c4b7ed8a713839e46bbb';
+```
 
 ---
 
 ## 4. Deserializing ledger fields
 
-The indexer returns raw bytes of unreadable data. To turn them into typed fields like `totalSupply`, import the compiled smart contract module with the help of `@midnight-ntwrk/compact-runtime` and pass the raw data through its `ledger()` constructor.
+The indexer returns raw bytes that are unreadable without deserialization. To turn them into typed fields like `totalSupply`, import the compiled smart contract module with the help of `@midnight-ntwrk/compact-runtime` and pass the raw data through its `ledger()` constructor.
 
 ```typescript
 const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
@@ -229,11 +240,19 @@ console.log('[ContractState] Ledger totalBurned:', ledgerState.totalBurned.toStr
 
 ## 5. Displaying contract state in a UI
 
-Now that you have the data, render it. The example project displays four stats on the dashboard: `totalSupply`, `totalBurned`, `contractBalance`, and `walletBalance`.
+Now that you have all the data you need, all that remains is to render it in the frontend as `totalSupply`, `totalBurned`, `contractBalance`, and `walletBalance`.
 
-The actual `Home.tsx` consumes the `useContractState` hook and renders them inline:
 
-```tsx
+The actual `Home.tsx` uses the `useContractState` hook and renders them inline:
+
+```typescript
+import { Link } from 'react-router-dom';
+import { useWalletStore } from '../hooks/useWallet';
+import { ConnectButton } from '../components/ui/ConnectButton';
+import { useContractState } from '../hooks/useContractState';
+
+// .. other utilities
+
 export function HomePage() {
   const { isConnected, connectedApi } = useWalletStore();
   const { state } = useContractState(connectedApi, { pollInterval: 15000 });
@@ -277,17 +296,20 @@ export function HomePage() {
 }
 ```
 
-The hook returns `null` while loading, so the `?? 0n` fallback keeps the UI from crashing. The grid uses `grid-cols-2` on mobile and `grid-cols-4` on larger screens. The vault balance shows a subtext when burned tokens are held, so users know the raw balance includes surrendered tokens.
+The hook returns `null` while loading, so the frontend does not crash and uses `?? 0n` as a fallback. The grid uses `grid-cols-2` on mobile and `grid-cols-4` on larger screens. The vault balance shows held burned tokens, so users know the raw balance includes burned tokens. 
 
-You can extend this pattern to any smart contract. The only things that change are the ledger fields you deserialize and the token color you look up in the balance map.
+You can use this pattern with any other smart contract; all that changes are the ledger fields you deserialize and the token you look up by color in the balance map.
+
+
+![Dashboard showing four stat cards: Total Supply, Total Burned, Vault Balance, and Wallet Balance](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/ddhtg8c5d28fyn4j7m06.png)
 
 ---
 
 ## 6. Real-time updates with WebSocket subscriptions
 
-Polling with `useEffect` works, but it is inefficient for dashboards that need to stay current. The Midnight indexer exposes GraphQL subscriptions over WebSocket. The most useful one for smart contract state is `contractActions`, which emits an event every time your smart contract is called or deployed.
+Using `useEffect` for polling technically works, but it is inefficient for dashboards that need to stay up to date. The Midnight indexer exposes GraphQL subscriptions over WebSocket. `contractActions` emits an event every time your smart contract is called / deployed.
 
-Because `indexerPublicDataProvider` does not yet surface subscriptions directly, open a raw WebSocket to the indexer and send a GraphQL `start` message:
+`indexerPublicDataProvider` does not surface subscriptions directly, so open a raw WebSocket to the indexer and send a GraphQL `start` message to `wss://indexer.preprod.midnight.network/api/v4/graphql/ws`:
 
 ```typescript
 const WS_URL = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
@@ -333,7 +355,7 @@ function subscribeToContractActions(
 }
 ```
 
-Each payload contains the smart contract's new `state.data` bytes. You deserialize them the same way as before:
+Each payload contains the smart contract's latest `state.data` bytes. Deserialize them with `ledger()`.
 
 ```typescript
 const unsubscribe = subscribeToContractActions(CONTRACT_ADDRESS, (action) => {
@@ -344,26 +366,9 @@ const unsubscribe = subscribeToContractActions(CONTRACT_ADDRESS, (action) => {
 });
 ```
 
-### Handling smart contract upgrades gracefully
-
-If you add a new ledger field and redeploy, the frontend may load a new smart contract module while users are still looking at the old deployed smart contract. When the new module's `ledger()` deserializes state from the old smart contract, accessing a missing field throws an index-out-of-bounds error.
-
-The `getContractState` helper handles this by wrapping the new field access in a `try/catch`:
-
-```typescript
-let burnedBalance = 0n;
-try {
-  burnedBalance = ledgerState.burnedBalance ?? 0n;
-} catch {
-  burnedBalance = 0n;
-}
-```
-
-This pattern lets the frontend degrade gracefully until the smart contract address is updated to the newly deployed one.
-
 ### The `useContractState` hook
 
-The project implements the full pattern in `src/hooks/useContractState.ts`. It combines polling with a WebSocket subscription, falling back to polling every 15 seconds if the WebSocket drops.
+This project implements the full pattern in `src/hooks/useContractState.ts`. It combines polling with a WebSocket subscription, falling back to polling every 15 seconds if the WebSocket drops.
 
 ```typescript
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -405,6 +410,7 @@ export function useContractState(
         getContractBalance(),
         connectedApi ? getUserStablecoinBalance(connectedApi) : Promise.resolve(0n),
       ]);
+      // Usable contract balance = raw balance minus tokens that were burned into the contract
       const usableContractBalance = cb > s.burnedBalance ? cb - s.burnedBalance : 0n;
       setState({
         totalSupply: s.totalSupply,
@@ -421,7 +427,7 @@ export function useContractState(
     }
   }, [connectedApi]);
 
-  // Polling fallback
+  // Initial fetch + polling fallback
   useEffect(() => {
     if (!connectedApi) {
       setLoading(false);
@@ -464,6 +470,7 @@ export function useContractState(
         if (msg.type === 'data' && msg.payload?.data?.contractActions) {
           const action = msg.payload.data.contractActions;
           const blockHeight = action.transaction?.block?.height;
+          // Refetch on new block to avoid duplicate processing
           if (blockHeight && blockHeight !== lastBlockRef.current) {
             lastBlockRef.current = blockHeight;
             fetchState();
@@ -495,7 +502,7 @@ export function useContractState(
 }
 ```
 
-> **Note:** The `graphql-ws` protocol expects `connection_init` before `start`. If you use `subscriptions-transport-ws` (the older protocol), the handshake is slightly different. Preprod indexer supports `graphql-ws`.
+> **Note:** `graphql-ws` expects a `connection_init` before `start`, so if you use `subscriptions-transport-ws` (older protocol), the handshake is slightly different. The Preprod indexer supports `graphql-ws`.
 
 ---
 
@@ -503,39 +510,33 @@ export function useContractState(
 
 | Approach | Pros | Cons | Best for |
 |---|---|---|---|
-| **Polling** | Simple, works behind firewalls, easy to retry | Higher latency, more bandwidth | Admin panels, low-traffic UIs |
-| **WebSocket subscription** | Near real-time, efficient for frequent updates | Requires persistent connection, harder to debug | Dashboards, live counters, event feeds |
-| **`watchForContractState`** | Built-in, no extra code | Blocks until next change, no streaming | One-shot "wait for deployment" flows |
+| **Polling** | Quick entry, works behind firewalls.. | Higher latency, more resources used. | low-traffic UIs (Admin panel) |
+| **WebSocket subscription** | Efficient for real-time updates | Requires stable connection, harder to debug| Apps requiring real-time updates |
 
-In practice, the hybrid approach shown in `useContractState` is the most robust: run a background poll as a safety net, and layer a WebSocket subscription on top for low-latency updates.
+The hybrid approach used in `useContractState` is robust: it uses a background poll as a safety net in case the WebSocket is unresponsive, while keeping the WebSocket as the primary layer because of its lower latency.
 
 ---
 
 ## Conclusion
 
-Querying smart contract state on Midnight follows a three-step pattern:
+You now have a complete pipeline for querying smart contract state from a React/TypeScript frontend on the Midnight network. The pattern is always the same: build an `indexerPublicDataProvider`, call the query method that works for your needs, deserialize the raw bytes with your compiled smart contract's `ledger()` constructor, and render the fields in your UI.
 
-1. **Query** — Use `indexerPublicDataProvider` to fetch raw state from the indexer.
-2. **Deserialize** — Pass `contractState.data` through the compiled smart contract's `ledger()` function to get typed fields.
-3. **Display** — Render the fields in React, optionally backed by a WebSocket subscription for live updates.
-
-The example project implements all three steps in `contractCalls.ts` and `useContractState.ts`. Add a subscription to the mix and you have a dashboard that stays in sync with the chain in real time.
+This is not limited to stablecoin vaults. Any smart contract that exposes `export ledger` fields can be queried the same way. You only need to change the ledger fields you choose to deserialize, for example `totalSupply` or `totalEmployees`, and the token colors you look up in the balance map.
 
 ---
 
+## Next steps
+
+Now that you've finished this tutorial, here are a few things you can do next:
+
+- Check the full repository [source code](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
+- Deploy a hello-world contract and display ledger fields on a frontend
+- Read the Midnight Compact language docs
+- Understand `ContractState` from the [Midnight documentation](https://docs.midnight.network/api-reference/onchain-runtime/classes/ContractState)
+
 ## Troubleshooting
 
-**`queryContractState` returns `null`**
-This means the indexer has not yet indexed the smart contract. It can happen immediately after deployment. Use `watchForContractState` if you need to block until the state appears, or retry with a backoff.
-
-**`ledger()` throws `RangeError` or returns garbage**
-You are probably passing the wrong smart contract module. Make sure your `CONTRACT_PATH + '/contract/index.js'` was regenerated after your last `.compact` change and matches the deployed bytecode. If you see `invalid operation for type: index out of bounds`, the deployed smart contract was compiled from an older source that is missing a ledger field the frontend expects.
-
-**Subscription receives no data**
-Check that the WebSocket URL uses `wss://` and that you sent `connection_init` before `start`. Also confirm the smart contract address is lower-case hex without `0x`.
-
-**Balance map iteration is empty**
-`contractState.balance` is a `Map`. Use `.entries()` to iterate. Token keys are objects with a `raw` field, not plain strings.
-
-**Burned tokens still appear in smart contract balance**
-In Midnight's unshielded token model, there is no `destroy` operation. `burnStablecoin` moves tokens to the smart contract and decrements `totalSupply`. The smart contract tracks `burnedBalance` separately so the frontend can compute usable balance as `rawBalance - burnedBalance`. This is a presentation-layer fix — at the ledger level, the tokens still exist in the smart contract's custody.
+- **"Wallet not detected"** → Make sure 1AM or Lace browser extensions are installed
+- **Transactions failing** → Make sure you have tDUST and that the wallet is fully synced
+- **0 Values** → Make sure that the wallet is fully synced. Sometimes you need to open the wallet popup to force a sync (you could also manage this systematically)
+- **WebSocket connectivity issues** → Make sure that your network is stable 
