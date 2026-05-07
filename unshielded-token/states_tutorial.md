@@ -24,6 +24,54 @@ By the end, you will have a reusable `useContractState` hook that keeps your UI 
 
 ---
 
+## Understanding the contract ledger
+
+Before querying anything, it helps to know what you are actually querying. A Midnight contract has two separate on-chain data sources:
+
+| Data source | What's inside | How you access it |
+|---|---|---|
+| **Ledger state** (`data`) | Typed fields declared with `export ledger` in Compact | `contractModule.ledger(contractState.data)` |
+| **Contract balance** (`balance`) | A `Map<TokenType, bigint>` of unshielded tokens held by the contract | `contractState.balance` directly |
+
+The ledger is defined in your `.compact` file. For the example contract used in this tutorial, the ledger looks like this:
+
+```compact
+pragma language_version 0.22;
+import CompactStandardLibrary;
+
+export ledger totalSupply: Uint<64>;
+export ledger totalBurned: Uint<64>;
+export ledger burnedBalance: Uint<64>;
+```
+
+When `compactc` compiles this, it generates a JavaScript `ledger()` constructor that knows exactly how to deserialize the raw bytes into those three typed fields. The resulting object gives you plain `bigint` values:
+
+```typescript
+const ledgerState = contractModule.ledger(contractState.data);
+
+// ledgerState.totalSupply  → bigint
+// ledgerState.totalBurned  → bigint
+// ledgerState.burnedBalance → bigint
+```
+
+The contract balance is separate from the ledger. It tracks how many unshielded tokens the contract currently holds — similar to how a wallet holds tokens. When you call `mintUnshieldedToken` with the contract as the recipient, the tokens appear here. When you call `sendUnshielded` from the contract to a user, they leave.
+
+```typescript
+const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
+
+// Ledger fields (your custom state)
+console.log('Total supply:', ledgerState.totalSupply);
+
+// Contract balance (tokens held by the contract)
+for (const [tokenType, amount] of contractState.balance.entries()) {
+  console.log(`Token ${tokenType.raw}: ${amount}`);
+}
+```
+
+> **Key distinction:** `totalSupply` is an accounting number you maintain in the ledger. The contract's actual token holdings live in `balance`. They are related but not the same. For example, after burning, `totalSupply` drops but the contract `balance` may still hold the surrendered tokens.
+
+---
+
 ## 1. The indexer provider
 
 `@midnight-ntwrk/midnight-js-indexer-public-data-provider` exports `indexerPublicDataProvider`, which wraps an Apollo Client around the Indexer's GraphQL endpoint. It implements the `PublicDataProvider` interface and gives you typed methods for querying chain data.
@@ -249,59 +297,47 @@ export async function getContractBalance(): Promise<bigint> {
 
 ## 7. Displaying contract state in a React UI
 
-The project fetches and displays four stats on the dashboard: `totalSupply`, `totalBurned`, `contractBalance`, and `walletBalance`. Here is the pattern extracted into a reusable component.
+The project displays four stats on the dashboard: `totalSupply`, `totalBurned`, `contractBalance`, and `walletBalance`. The actual `Home.tsx` consumes the `useContractState` hook and renders them inline:
 
-```typescript
-import { useState, useEffect } from 'react';
-import { getContractState, getContractBalance } from '../hooks/wallet/services/contractCalls';
+```tsx
+export function HomePage() {
+  const { isConnected, connectedApi } = useWalletStore();
+  const { state } = useContractState(connectedApi, { pollInterval: 15000 });
 
-export function ContractStats() {
-  const [state, setState] = useState({ totalSupply: 0n, totalBurned: 0n, burnedBalance: 0n });
-  const [balance, setBalance] = useState(0n);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const [s, b] = await Promise.all([
-          getContractState(),
-          getContractBalance(),
-        ]);
-        if (!cancelled) {
-          setState(s);
-          setBalance(b);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  if (loading) return <p>Loading on-chain data...</p>;
+  const totalSupply = state?.totalSupply ?? 0n;
+  const totalBurned = state?.totalBurned ?? 0n;
+  const burnedBalance = state?.burnedBalance ?? 0n;
+  const contractBalance = state?.contractBalance ?? 0n;
+  const walletBalance = state?.walletBalance ?? 0n;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-      <div className="p-4 rounded-xl border">
-        <p className="text-xs uppercase text-gray-400">Total Supply</p>
-        <p className="text-xl font-semibold">{state.totalSupply.toString()}</p>
-      </div>
-      <div className="p-4 rounded-xl border">
-        <p className="text-xs uppercase text-gray-400">Total Burned</p>
-        <p className="text-xl font-semibold">{state.totalBurned.toString()}</p>
-      </div>
-      <div className="p-4 rounded-xl border">
-        <p className="text-xs uppercase text-gray-400">Vault Balance</p>
-        <p className="text-xl font-semibold">{balance.toString()}</p>
-      </div>
-      <div className="p-4 rounded-xl border">
-        <p className="text-xs uppercase text-gray-400">Wallet Balance</p>
-        <p className="text-xl font-semibold">{walletBalance.toString()}</p>
-      </div>
+    <div className="w-full max-w-4xl mx-auto">
+      {isConnected && (
+        <div className="py-12 space-y-8">
+          {/* Stats Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Total Supply</p>
+              <p className="text-xl font-semibold text-white">{totalSupply.toString()}</p>
+            </div>
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Total Burned</p>
+              <p className="text-xl font-semibold text-white">{totalBurned.toString()}</p>
+            </div>
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Vault Balance</p>
+              <p className="text-xl font-semibold text-white">{contractBalance.toString()}</p>
+              {burnedBalance > 0n && (
+                <p className="text-[10px] text-text-muted/40 mt-1">{burnedBalance.toString()} burned held</p>
+              )}
+            </div>
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Wallet Balance</p>
+              <p className="text-xl font-semibold text-white">{walletBalance.toString()}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -478,6 +514,9 @@ export function useContractState(
             lastBlockRef.current = blockHeight;
             fetchState();
           }
+        }
+        if (msg.type === 'ka') {
+          // Keep-alive, ignore
         }
       } catch (e) {
         console.error('[useContractState] Failed to parse message:', e);
