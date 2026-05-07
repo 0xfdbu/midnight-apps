@@ -411,13 +411,22 @@ export async function getZSwapAndContractState(): Promise<{ firstFree: bigint; t
     }
 
     const [zswapState, contractState, ledgerParams] = result;
+    console.log('[ZSwapState] zswapState.firstFree:', zswapState.firstFree.toString());
+
     const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
     const ledgerState = contractModule.ledger(contractState.data);
+    console.log('[ZSwapState] ledgerState.totalSupply:', ledgerState.totalSupply.toString());
+    console.log('[ZSwapState] ledgerState.totalBurned:', ledgerState.totalBurned.toString());
 
     let burnedBalance = 0n;
     try {
       burnedBalance = ledgerState.burnedBalance ?? 0n;
-    } catch {}
+      console.log('[ZSwapState] ledgerState.burnedBalance:', burnedBalance.toString());
+    } catch {
+      console.log('[ZSwapState] ledgerState.burnedBalance: not available (old contract)');
+    }
+
+    console.log('[ZSwapState] ledgerParams.dust:', JSON.stringify(ledgerParams.dust, (_, v) => typeof v === 'bigint' ? v.toString() : v));
 
     return {
       firstFree: zswapState.firstFree,
