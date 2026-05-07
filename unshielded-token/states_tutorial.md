@@ -219,8 +219,315 @@ console.log('[ContractState] Ledger totalBurned:', ledgerState.totalBurned.toStr
 
 ---
 
-## Next steps
+## 5. Displaying contract state in a UI
 
-- Read the full repository [source code on GitHub](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
-- Check the Midnight Compact language docs
-- Add WebSocket subscriptions for real-time state updates using `contractActions`
+Now that you have the data, render it. The example project displays four stats on the dashboard: `totalSupply`, `totalBurned`, `contractBalance`, and `walletBalance`.
+
+The actual `Home.tsx` consumes the `useContractState` hook and renders them inline:
+
+```tsx
+export function HomePage() {
+  const { isConnected, connectedApi } = useWalletStore();
+  const { state } = useContractState(connectedApi, { pollInterval: 15000 });
+
+  const totalSupply = state?.totalSupply ?? 0n;
+  const totalBurned = state?.totalBurned ?? 0n;
+  const burnedBalance = state?.burnedBalance ?? 0n;
+  const contractBalance = state?.contractBalance ?? 0n;
+  const walletBalance = state?.walletBalance ?? 0n;
+
+  return (
+    <div className="w-full max-w-4xl mx-auto">
+      {isConnected && (
+        <div className="py-12 space-y-8">
+          {/* Stats Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Total Supply</p>
+              <p className="text-xl font-semibold text-white">{totalSupply.toString()}</p>
+            </div>
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Total Burned</p>
+              <p className="text-xl font-semibold text-white">{totalBurned.toString()}</p>
+            </div>
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Vault Balance</p>
+              <p className="text-xl font-semibold text-white">{contractBalance.toString()}</p>
+              {burnedBalance > 0n && (
+                <p className="text-[10px] text-text-muted/40 mt-1">{burnedBalance.toString()} burned held</p>
+              )}
+            </div>
+            <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Wallet Balance</p>
+              <p className="text-xl font-semibold text-white">{walletBalance.toString()}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+The hook returns `null` while loading, so the `?? 0n` fallback keeps the UI from crashing. The grid uses `grid-cols-2` on mobile and `grid-cols-4` on larger screens. The vault balance shows a subtext when burned tokens are held, so users know the raw balance includes surrendered tokens.
+
+You can extend this pattern to any smart contract. The only things that change are the ledger fields you deserialize and the token color you look up in the balance map.
+
+---
+
+## 6. Real-time updates with WebSocket subscriptions
+
+Polling with `useEffect` works, but it is inefficient for dashboards that need to stay current. The Midnight indexer exposes GraphQL subscriptions over WebSocket. The most useful one for smart contract state is `contractActions`, which emits an event every time your smart contract is called or deployed.
+
+Because `indexerPublicDataProvider` does not yet surface subscriptions directly, open a raw WebSocket to the indexer and send a GraphQL `start` message:
+
+```typescript
+const WS_URL = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
+
+function subscribeToContractActions(
+  contractAddress: string,
+  onAction: (data: any) => void
+) {
+  const ws = new WebSocket(WS_URL, 'graphql-ws');
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'connection_init' }));
+    ws.send(JSON.stringify({
+      id: '1',
+      type: 'start',
+      payload: {
+        query: `
+          subscription ContractActions($address: HexEncoded!) {
+            contractActions(address: $address) {
+              state { data }
+              transaction { block { height } }
+            }
+          }
+        `,
+        variables: { address: contractAddress },
+      },
+    }));
+  };
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'data' && msg.payload?.data?.contractActions) {
+      onAction(msg.payload.data.contractActions);
+    }
+  };
+
+  ws.onerror = (err) => console.error('WebSocket error:', err);
+
+  return () => {
+    ws.send(JSON.stringify({ id: '1', type: 'stop' }));
+    ws.close();
+  };
+}
+```
+
+Each payload contains the smart contract's new `state.data` bytes. You deserialize them the same way as before:
+
+```typescript
+const unsubscribe = subscribeToContractActions(CONTRACT_ADDRESS, (action) => {
+  const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
+  const ledgerState = contractModule.ledger(action.state.data);
+  console.log('New totalSupply:', ledgerState.totalSupply.toString());
+  console.log('New totalBurned:', ledgerState.totalBurned.toString());
+});
+```
+
+### Handling smart contract upgrades gracefully
+
+If you add a new ledger field and redeploy, the frontend may load a new smart contract module while users are still looking at the old deployed smart contract. When the new module's `ledger()` deserializes state from the old smart contract, accessing a missing field throws an index-out-of-bounds error.
+
+The `getContractState` helper handles this by wrapping the new field access in a `try/catch`:
+
+```typescript
+let burnedBalance = 0n;
+try {
+  burnedBalance = ledgerState.burnedBalance ?? 0n;
+} catch {
+  burnedBalance = 0n;
+}
+```
+
+This pattern lets the frontend degrade gracefully until the smart contract address is updated to the newly deployed one.
+
+### The `useContractState` hook
+
+The project implements the full pattern in `src/hooks/useContractState.ts`. It combines polling with a WebSocket subscription, falling back to polling every 15 seconds if the WebSocket drops.
+
+```typescript
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  CONTRACT_ADDRESS,
+  INDEXER_WS,
+} from './wallet/wallet.constants';
+import {
+  getContractState,
+  getContractBalance,
+  getUserStablecoinBalance,
+} from './wallet/services/contractCalls';
+import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
+
+export interface ContractStateSnapshot {
+  totalSupply: bigint;
+  totalBurned: bigint;
+  burnedBalance: bigint;
+  contractBalance: bigint;
+  walletBalance: bigint;
+  blockHeight?: number;
+}
+
+export function useContractState(
+  connectedApi: ConnectedAPI | null,
+  opts: { pollInterval?: number } = {}
+) {
+  const { pollInterval = 15000 } = opts;
+  const [state, setState] = useState<ContractStateSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const lastBlockRef = useRef<number | undefined>(undefined);
+
+  const fetchState = useCallback(async () => {
+    try {
+      const [s, cb, wb] = await Promise.all([
+        getContractState(),
+        getContractBalance(),
+        connectedApi ? getUserStablecoinBalance(connectedApi) : Promise.resolve(0n),
+      ]);
+      const usableContractBalance = cb > s.burnedBalance ? cb - s.burnedBalance : 0n;
+      setState({
+        totalSupply: s.totalSupply,
+        totalBurned: s.totalBurned,
+        burnedBalance: s.burnedBalance,
+        contractBalance: usableContractBalance,
+        walletBalance: wb,
+      });
+      setError(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [connectedApi]);
+
+  // Polling fallback
+  useEffect(() => {
+    if (!connectedApi) {
+      setLoading(false);
+      return;
+    }
+    fetchState();
+    const id = setInterval(fetchState, pollInterval);
+    return () => clearInterval(id);
+  }, [fetchState, pollInterval, connectedApi]);
+
+  // WebSocket subscription for push updates
+  useEffect(() => {
+    if (!connectedApi) return;
+
+    const ws = new WebSocket(INDEXER_WS, 'graphql-ws');
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'connection_init' }));
+      ws.send(JSON.stringify({
+        id: 'contract-state-sub',
+        type: 'start',
+        payload: {
+          query: `
+            subscription ContractStateUpdates($address: HexEncoded!) {
+              contractActions(address: $address) {
+                state { data }
+                transaction { block { height } }
+              }
+            }
+          `,
+          variables: { address: CONTRACT_ADDRESS },
+        },
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'data' && msg.payload?.data?.contractActions) {
+          const action = msg.payload.data.contractActions;
+          const blockHeight = action.transaction?.block?.height;
+          if (blockHeight && blockHeight !== lastBlockRef.current) {
+            lastBlockRef.current = blockHeight;
+            fetchState();
+          }
+        }
+        if (msg.type === 'ka') {
+          // Keep-alive, ignore
+        }
+      } catch (e) {
+        console.error('[useContractState] Failed to parse message:', e);
+      }
+    };
+
+    ws.onerror = (err) => {
+      console.error('[useContractState] WebSocket error:', err);
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        try {
+          ws.send(JSON.stringify({ id: 'contract-state-sub', type: 'stop' }));
+        } catch {}
+        ws.close();
+      }
+    };
+  }, [connectedApi, fetchState]);
+
+  return { state, loading, error, refetch: fetchState };
+}
+```
+
+> **Note:** The `graphql-ws` protocol expects `connection_init` before `start`. If you use `subscriptions-transport-ws` (the older protocol), the handshake is slightly different. Preprod indexer supports `graphql-ws`.
+
+---
+
+## 7. When to poll vs when to subscribe
+
+| Approach | Pros | Cons | Best for |
+|---|---|---|---|
+| **Polling** | Simple, works behind firewalls, easy to retry | Higher latency, more bandwidth | Admin panels, low-traffic UIs |
+| **WebSocket subscription** | Near real-time, efficient for frequent updates | Requires persistent connection, harder to debug | Dashboards, live counters, event feeds |
+| **`watchForContractState`** | Built-in, no extra code | Blocks until next change, no streaming | One-shot "wait for deployment" flows |
+
+In practice, the hybrid approach shown in `useContractState` is the most robust: run a background poll as a safety net, and layer a WebSocket subscription on top for low-latency updates.
+
+---
+
+## Conclusion
+
+Querying smart contract state on Midnight follows a three-step pattern:
+
+1. **Query** — Use `indexerPublicDataProvider` to fetch raw state from the indexer.
+2. **Deserialize** — Pass `contractState.data` through the compiled smart contract's `ledger()` function to get typed fields.
+3. **Display** — Render the fields in React, optionally backed by a WebSocket subscription for live updates.
+
+The example project implements all three steps in `contractCalls.ts` and `useContractState.ts`. Add a subscription to the mix and you have a dashboard that stays in sync with the chain in real time.
+
+---
+
+## Troubleshooting
+
+**`queryContractState` returns `null`**
+This means the indexer has not yet indexed the smart contract. It can happen immediately after deployment. Use `watchForContractState` if you need to block until the state appears, or retry with a backoff.
+
+**`ledger()` throws `RangeError` or returns garbage**
+You are probably passing the wrong smart contract module. Make sure your `CONTRACT_PATH + '/contract/index.js'` was regenerated after your last `.compact` change and matches the deployed bytecode. If you see `invalid operation for type: index out of bounds`, the deployed smart contract was compiled from an older source that is missing a ledger field the frontend expects.
+
+**Subscription receives no data**
+Check that the WebSocket URL uses `wss://` and that you sent `connection_init` before `start`. Also confirm the smart contract address is lower-case hex without `0x`.
+
+**Balance map iteration is empty**
+`contractState.balance` is a `Map`. Use `.entries()` to iterate. Token keys are objects with a `raw` field, not plain strings.
+
+**Burned tokens still appear in smart contract balance**
+In Midnight's unshielded token model, there is no `destroy` operation. `burnStablecoin` moves tokens to the smart contract and decrements `totalSupply`. The smart contract tracks `burnedBalance` separately so the frontend can compute usable balance as `rawBalance - burnedBalance`. This is a presentation-layer fix — at the ledger level, the tokens still exist in the smart contract's custody.
