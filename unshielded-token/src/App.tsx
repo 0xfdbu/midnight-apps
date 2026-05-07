@@ -6,6 +6,7 @@ import { SendPage } from './pages/Send';
 import { MintPage } from './pages/Mint';
 import { BurnPage } from './pages/Burn';
 import { DeployPage } from './pages/Deploy';
+import { ZSwapStatePage } from './pages/ZSwapState';
 import { ReceivePage } from './pages/Receive';
 import { ContractSendPage } from './pages/ContractSend';
 import { WalletInfoPage } from './pages/WalletInfo';
@@ -50,6 +51,7 @@ function App() {
           <Route path="/mint" element={<MintPage />} />
           <Route path="/burn" element={<BurnPage />} />
           <Route path="/deploy" element={<DeployPage />} />
+          <Route path="/zswap-state" element={<ZSwapStatePage />} />
           <Route path="/receive" element={<ReceivePage />} />
           <Route path="/contract-send" element={<ContractSendPage />} />
           <Route path="/wallet-info" element={<WalletInfoPage />} />

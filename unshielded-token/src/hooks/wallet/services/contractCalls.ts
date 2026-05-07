@@ -397,6 +397,41 @@ export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Prom
   }
 }
 
+export async function getZSwapAndContractState(): Promise<{ firstFree: bigint; totalSupply: bigint; totalBurned: bigint; burnedBalance: bigint; dustParams: any } | null> {
+  try {
+    const mods = await getModules();
+    const { indexerModule } = mods;
+    const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
+    const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
+
+    const result = await provider.queryZSwapAndContractState(CONTRACT_ADDRESS);
+    if (!result) {
+      console.log('[ZSwapState] No zswap+contract state found');
+      return null;
+    }
+
+    const [zswapState, contractState, ledgerParams] = result;
+    const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
+    const ledgerState = contractModule.ledger(contractState.data);
+
+    let burnedBalance = 0n;
+    try {
+      burnedBalance = ledgerState.burnedBalance ?? 0n;
+    } catch {}
+
+    return {
+      firstFree: zswapState.firstFree,
+      totalSupply: ledgerState.totalSupply,
+      totalBurned: ledgerState.totalBurned,
+      burnedBalance,
+      dustParams: ledgerParams.dust,
+    };
+  } catch (err) {
+    console.error('[ZSwapState] Error:', err);
+    return null;
+  }
+}
+
 export async function getContractBalance(): Promise<bigint> {
   try {
     const mods = await getModules();

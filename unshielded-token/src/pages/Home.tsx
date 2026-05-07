@@ -224,6 +224,30 @@ export function HomePage() {
                     </p>
                   </div>
                 </Link>
+
+                {/* ZSwap State */}
+                <Link
+                  to="/zswap-state"
+                  className="group flex flex-col p-5 bg-bg-tertiary/40 border border-border/80 rounded-2xl hover:bg-bg-tertiary hover:border-border-hover active:scale-[0.98] transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-border-hover"
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 group-hover:bg-violet-500/20 transition-colors">
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                      </svg>
+                    </div>
+                    <ChevronRightIcon className="w-5 h-5 text-text-muted/0 group-hover:text-text-muted/60 -translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-white transition-colors">
+                      ZSwap State
+                    </h3>
+                    <p className="text-[13px] text-text-muted leading-snug">
+                      Query combined ZSwap + contract state atomically.
+                    </p>
+                  </div>
+                </Link>
                 
                 {/* Mint Tokens */}
                 <Link
