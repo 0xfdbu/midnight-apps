@@ -50,7 +50,7 @@ A stablecoin DApp with unshielded token operations. Demonstrates native minting,
 
 ---
 
-### [shielded-token](./shielded-token/)
+### [shielded-token](./shielded-token/) - Work in progress
 
 A privacy-preserving token DApp with shielded token operations. Users can mint, transfer, and burn tokens while keeping all balances and amounts hidden from on-chain observers.
 

@@ -34,8 +34,6 @@ Within the next few sections, you go through smart contract compilation and focu
 
 ## 1. Building the smart contract
 
-For this demonstration, build a zero-knowledge attestation protocol with selective disclosure.
-
 For this attestation you need two core witnesses. `localSecretKey()` will be used to fetch the user's secret key, and `findAgePath(commit: Bytes<32>)` fetches the required cryptographic Merkle path from the local private state and passes it to the circuit(s) as needed.
 
 ```typescript
