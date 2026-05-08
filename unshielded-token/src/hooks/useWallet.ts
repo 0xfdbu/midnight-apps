@@ -16,7 +16,6 @@ import {
 } from './wallet/services/contractCalls';
 import {
   loadWalletState,
-  makeTransfer,
   sendStablecoin,
   checkConnectionStatus,
 } from './wallet/services/walletState';
@@ -48,7 +47,6 @@ export interface WalletState {
   resetConnection: () => void;
   connect: (networkId: string) => Promise<void>;
   loadWalletState: () => Promise<void>;
-  makeTransfer: (recipient: string, amount: bigint) => Promise<void>;
   mintToContract: (amount: bigint) => Promise<void>;
   burnFromContract: (amount: bigint) => Promise<void>;
   sendStablecoin: (recipient: string, amount: bigint) => Promise<void>;
@@ -165,47 +163,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       }
     } finally {
       setIsLoadingState(false);
-    }
-  },
-
-  makeTransfer: async (recipient, amount) => {
-    const { connectedApi, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
-    if (!connectedApi) {
-      setError('Not connected');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-    setTransactionHash(null);
-
-    try {
-      const isConnected = await checkConnectionStatus(connectedApi);
-      if (!isConnected) {
-        useWalletStore.getState().resetConnection();
-        setError('Wallet disconnected. Please reconnect.');
-        return;
-      }
-
-      await makeTransfer(
-        connectedApi,
-        recipient,
-        amount,
-        async () => {
-          setTransactionHash('transfer-success');
-          await loadWalletState();
-        },
-        (err) => {
-          if (err === 'Disconnected') {
-            useWalletStore.getState().resetConnection();
-            setError('Wallet disconnected. Please reconnect.');
-          } else {
-            setError(err);
-          }
-        }
-      );
-    } finally {
-      setIsSubmitting(false);
     }
   },
 

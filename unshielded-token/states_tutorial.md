@@ -26,7 +26,7 @@
 
 ## Summary
 
-This guide shows how to query and visualize deployed smart contract state from a React frontend on the Midnight network. You will learn how to use `indexerPublicDataProvider` for GraphQL queries, how to deserialize raw ledger bytes into typed fields, and how to render everything in the frontend.
+This guide shows how to query and visualize deployed smart contract state from a React frontend on the Midnight network. You will learn how to use `indexerPublicDataProvider` for GraphQL queries, how to deserialize ledger state into typed fields, and how to render everything in the frontend.
 
 You have a reusable `useContractState` hook that keeps your frontend in sync with on-chain state, whether you prefer polling or push-based subscriptions over WebSocket. This works with any smart contract that you have previously deployed; the example presented below is an unshielded stablecoin vault, but the patterns apply to any Midnight DApp needing to display on-chain data.
 
@@ -38,7 +38,7 @@ Before you query anything, you need to know what you are querying.
 
 | Property | What's inside | How you access it |
 |---|---|---|
-| **`data`** | The raw bytes of the smart contract's primary state, including typed fields declared with `export ledger` in Compact | `contractModule.ledger(contractState.data)` |
+| **`data`** | The contract's ledger state as a `ChargedState` object, including typed fields declared with `export ledger` in Compact | `contractModule.ledger(contractState.data)` |
 | **`balance`** | A `Map<TokenType, bigint>` of tokens held by the smart contract | `contractState.balance` directly |
 
 View the full `ContractState` reference in the [Midnight documentation](https://docs.midnight.network/api-reference/onchain-runtime/classes/ContractState).
@@ -54,7 +54,7 @@ export ledger totalBurned: Uint<64>;
 export ledger burnedBalance: Uint<64>;
 ```
 
-When you compile the smart contract, it generates a JavaScript `ledger()` constructor that knows exactly how to deserialize the raw bytes into those three typed fields. The library responsible for the deserialization is `@midnight-ntwrk/compact-runtime`, and the results are plain `bigint` values.
+When you compile the smart contract, it generates a JavaScript `ledger()` constructor that knows exactly how to read the ledger state through `ledger()` to access those three typed fields. The library responsible for the deserialization is `@midnight-ntwrk/compact-runtime`, and the results are plain `bigint` values.
 
 ```typescript
 const ledgerState = contractModule.ledger(contractState.data);
@@ -68,7 +68,7 @@ const ledgerState = contractModule.ledger(contractState.data);
 
 ## 1. The indexer provider
 
-`@midnight-ntwrk/midnight-js-indexer-public-data-provider` has an export `indexerPublicDataProvider` it wraps an Apollo Client around the indexer's GraphQL V4 endpoint. It implements `PublicDataProvider` interface and gives you typed methods for querying chain data.
+`@midnight-ntwrk/midnight-js-indexer-public-data-provider` exports `indexerPublicDataProvider`. It wraps an Apollo Client around the indexer's GraphQL V4 endpoint. It implements `PublicDataProvider` interface and gives you typed methods for querying chain data.
 
 ```typescript
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
@@ -87,7 +87,7 @@ The provider contains three useful methods for querying smart contract state:
 | `queryZSwapAndContractState(address)` | `[ZswapChainState, ContractState, LedgerParameters]` | You also need the global shielded state or parameters |
 | `queryUnshieldedBalances(address)` | `UnshieldedBalances` | You only need the smart contract's native token balances |
 
-All three `queryContractState(address)` `queryZSwapAndContractState(address)` `queryUnshieldedBalances(address)` accept an optional second argument to query at a specific block height or hash. If omitted, the latest state is returned.
+All three — `queryContractState(address)`, `queryZSwapAndContractState(address)`, and `queryUnshieldedBalances(address)` — accept an optional second argument to query at a specific block height or hash. If omitted, the latest state is returned.
 
 ---
 
@@ -158,13 +158,8 @@ export async function getZSwapAndContractState(): Promise<{ firstFree: bigint; t
     console.log('[ZSwapState] ledgerState.totalSupply:', ledgerState.totalSupply.toString());
     console.log('[ZSwapState] ledgerState.totalBurned:', ledgerState.totalBurned.toString());
 
-    let burnedBalance = 0n;
-    try {
-      burnedBalance = ledgerState.burnedBalance ?? 0n;
-      console.log('[ZSwapState] ledgerState.burnedBalance:', burnedBalance.toString());
-    } catch {
-      console.log('[ZSwapState] ledgerState.burnedBalance: not available (old contract)');
-    }
+    const burnedBalance = ledgerState.burnedBalance ?? 0n;
+    console.log('[ZSwapState] ledgerState.burnedBalance:', burnedBalance.toString());
 
     console.log('[ZSwapState] ledgerParams.dust:', JSON.stringify(ledgerParams.dust, (_, v) => typeof v === 'bigint' ? v.toString() : v));
 
@@ -246,7 +241,6 @@ Now that you have all the data you need, all that remains is to render it in the
 The actual `Home.tsx` uses the `useContractState` hook and renders them inline:
 
 ```typescript
-import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { ConnectButton } from '../components/ui/ConnectButton';
 import { useContractState } from '../hooks/useContractState';
@@ -312,58 +306,59 @@ Using `useEffect` for polling technically works, but it is inefficient for dashb
 `indexerPublicDataProvider` does not surface subscriptions directly, so open a raw WebSocket to the indexer and send a GraphQL `start` message to `wss://indexer.preprod.midnight.network/api/v4/graphql/ws`:
 
 ```typescript
-const WS_URL = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
+const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
 
-function subscribeToContractActions(
-  contractAddress: string,
-  onAction: (data: any) => void
-) {
-  const ws = new WebSocket(WS_URL, 'graphql-ws');
+      ws = new WebSocket(INDEXER_WS, 'graphql-ws');
+      wsRef.current = ws;
 
-  ws.onopen = () => {
-    ws.send(JSON.stringify({ type: 'connection_init' }));
-    ws.send(JSON.stringify({
-      id: '1',
-      type: 'start',
-      payload: {
-        query: `
-          subscription ContractActions($address: HexEncoded!) {
-            contractActions(address: $address) {
-              state { data }
-              transaction { block { height } }
-            }
-          }
-        `,
-        variables: { address: contractAddress },
-      },
-    }));
-  };
-
-  ws.onmessage = (event) => {
-    const msg = JSON.parse(event.data);
-    if (msg.type === 'data' && msg.payload?.data?.contractActions) {
-      onAction(msg.payload.data.contractActions);
-    }
-  };
-
-  ws.onerror = (err) => console.error('WebSocket error:', err);
-
-  return () => {
-    ws.send(JSON.stringify({ id: '1', type: 'stop' }));
-    ws.close();
-  };
-}
+      ws.onopen = () => {
+        console.log('[useContractState] Socket: connected');
+        reconnectDelay = 1000; // Reset backoff on successful connection
+        ws!.send(JSON.stringify({ type: 'connection_init' }));
+        ws!.send(JSON.stringify({
+          id: 'contract-state-sub',
+          type: 'start',
+          payload: {
+            query: `
+              subscription ContractStateUpdates($address: HexEncoded!) {
+                contractActions(address: $address) {
+                  state
+                  transaction { block { height } }
+                }
+              }
+            `,
+            variables: { address: CONTRACT_ADDRESS },
+          },
+        }));
+      };
 ```
 
-Each payload contains the smart contract's latest `state.data` bytes. Deserialize them with `ledger()`.
+The WebSocket is used as a notification system. Whenever a message is received, `fetchState()` is called, which in turn triggers `getContractState()`, `getContractBalance()`, and `getUserStablecoinBalance()`.
 
 ```typescript
-const unsubscribe = subscribeToContractActions(CONTRACT_ADDRESS, (action) => {
-  const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
-  const ledgerState = contractModule.ledger(action.state.data);
-  console.log('New totalSupply:', ledgerState.totalSupply.toString());
-  console.log('New totalBurned:', ledgerState.totalBurned.toString());
-});
+  const fetchState = useCallback(async () => {
+    try {
+      const [s, cb, wb] = await Promise.all([
+        getContractState(),
+        getContractBalance(),
+        connectedApi ? getUserStablecoinBalance(connectedApi) : Promise.resolve(0n),
+      ]);
+      // Usable contract balance = raw balance minus tokens that were burned into the contract
+      const usableContractBalance = cb > s.burnedBalance ? cb - s.burnedBalance : 0n;
+      setState({
+        totalSupply: s.totalSupply,
+        totalBurned: s.totalBurned,
+        burnedBalance: s.burnedBalance,
+        contractBalance: usableContractBalance,
+        walletBalance: wb,
+      });
+      setError(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [connectedApi]);
 ```
 
 ### The `useContractState` hook
@@ -401,7 +396,9 @@ export function useContractState(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBlockRef = useRef<number | undefined>(undefined);
+  const intentionalCloseRef = useRef(new WeakSet<WebSocket>());
 
   const fetchState = useCallback(async () => {
     try {
@@ -433,8 +430,12 @@ export function useContractState(
       setLoading(false);
       return;
     }
+    console.log('[useContractState] Polling: fetching state...');
     fetchState();
-    const id = setInterval(fetchState, pollInterval);
+    const id = setInterval(() => {
+      console.log('[useContractState] Polling: interval tick');
+      fetchState();
+    }, pollInterval);
     return () => clearInterval(id);
   }, [fetchState, pollInterval, connectedApi]);
 
@@ -442,65 +443,113 @@ export function useContractState(
   useEffect(() => {
     if (!connectedApi) return;
 
-    const ws = new WebSocket(INDEXER_WS, 'graphql-ws');
-    wsRef.current = ws;
+    let ws: WebSocket | null = null;
+    let reconnectDelay = 1000;
+    const maxReconnectDelay = 30000;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const DEBOUNCE_MS = 500;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'connection_init' }));
-      ws.send(JSON.stringify({
-        id: 'contract-state-sub',
-        type: 'start',
-        payload: {
-          query: `
-            subscription ContractStateUpdates($address: HexEncoded!) {
-              contractActions(address: $address) {
-                state { data }
-                transaction { block { height } }
+    function connect() {
+      ws = new WebSocket(INDEXER_WS, 'graphql-ws');
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('[useContractState] Socket: connected');
+        reconnectDelay = 1000; // Reset backoff on successful connection
+        ws!.send(JSON.stringify({ type: 'connection_init' }));
+        ws!.send(JSON.stringify({
+          id: 'contract-state-sub',
+          type: 'start',
+          payload: {
+            query: `
+              subscription ContractStateUpdates($address: HexEncoded!) {
+                contractActions(address: $address) {
+                  state
+                  transaction { block { height } }
+                }
               }
+            `,
+            variables: { address: CONTRACT_ADDRESS },
+          },
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'data' && msg.payload?.data?.contractActions) {
+            const action = msg.payload.data.contractActions;
+            const blockHeight = action.transaction?.block?.height;
+            if (blockHeight && blockHeight !== lastBlockRef.current) {
+              lastBlockRef.current = blockHeight;
+              // Debounce: the indexer sends a backlog of historical actions on connect.
+              // Wait for the flood to stop before fetching, so 150 messages become 1 fetch.
+              if (debounceTimer) clearTimeout(debounceTimer);
+              debounceTimer = setTimeout(() => {
+                console.log('[useContractState] Socket: debounced fetch for block', blockHeight);
+                fetchState();
+                debounceTimer = null;
+              }, DEBOUNCE_MS);
             }
-          `,
-          variables: { address: CONTRACT_ADDRESS },
-        },
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'data' && msg.payload?.data?.contractActions) {
-          const action = msg.payload.data.contractActions;
-          const blockHeight = action.transaction?.block?.height;
-          // Refetch on new block to avoid duplicate processing
-          if (blockHeight && blockHeight !== lastBlockRef.current) {
-            lastBlockRef.current = blockHeight;
-            fetchState();
           }
+          if (msg.type === 'ka') {
+            // Keep-alive, ignore
+          }
+        } catch (e) {
+          console.error('[useContractState] Failed to parse message:', e);
         }
-        if (msg.type === 'ka') {
-          // Keep-alive, ignore
-        }
-      } catch (e) {
-        console.error('[useContractState] Failed to parse message:', e);
-      }
-    };
+      };
 
-    ws.onerror = (err) => {
-      console.error('[useContractState] WebSocket error:', err);
-    };
+      ws.onerror = (err) => {
+        // Suppress errors from intentional closes (React Strict Mode cleanup)
+        if (ws && intentionalCloseRef.current.has(ws)) return;
+        console.error('[useContractState] WebSocket error:', err);
+      };
+
+      ws.onclose = () => {
+        if (ws && intentionalCloseRef.current.has(ws)) {
+          console.log('[useContractState] Socket: closed intentionally');
+          return;
+        }
+        console.log(`[useContractState] Socket: disconnected, reconnecting in ${reconnectDelay}ms...`);
+        if (reconnectRef.current) clearTimeout(reconnectRef.current);
+        reconnectRef.current = setTimeout(() => {
+          reconnectDelay = Math.min(reconnectDelay * 2, maxReconnectDelay);
+          connect();
+        }, reconnectDelay);
+      };
+    }
+
+    connect();
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        try {
-          ws.send(JSON.stringify({ id: 'contract-state-sub', type: 'stop' }));
-        } catch {}
-        ws.close();
+      if (reconnectRef.current) {
+        clearTimeout(reconnectRef.current);
+        reconnectRef.current = null;
+      }
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      if (ws) {
+        intentionalCloseRef.current.add(ws);
+        if (ws.readyState === WebSocket.OPEN) {
+          try { ws.send(JSON.stringify({ id: 'contract-state-sub', type: 'stop' })); } catch {}
+          ws.close();
+        }
+        // If the socket is still CONNECTING (common in React Strict Mode),
+        // do not call close(). The browser will clean it up, and calling
+        // close() on a CONNECTING socket produces a console warning.
       }
     };
   }, [connectedApi, fetchState]);
 
   return { state, loading, error, refetch: fetchState };
 }
+
 ```
+
+If you want to enable/disable polling fallback, simply comment or uncomment the polling part.
 
 > **Note:** `graphql-ws` expects a `connection_init` before `start`, so if you use `subscriptions-transport-ws` (older protocol), the handshake is slightly different. The Preprod indexer supports `graphql-ws`.
 
@@ -510,8 +559,8 @@ export function useContractState(
 
 | Approach | Pros | Cons | Best for |
 |---|---|---|---|
-| **Polling** | Quick entry, works behind firewalls.. | Higher latency, more resources used. | low-traffic UIs (Admin panel) |
-| **WebSocket subscription** | Efficient for real-time updates | Requires stable connection, harder to debug| Apps requiring real-time updates |
+| **Polling** | Quick entry, works behind firewalls. | Higher latency, more resources used. | Low-traffic UIs (admin panel) |
+| **WebSocket subscription** | Efficient for real-time updates. | Requires stable connection, harder to debug. | Apps requiring real-time updates |
 
 The hybrid approach used in `useContractState` is robust: it uses a background poll as a safety net in case the WebSocket is unresponsive, while keeping the WebSocket as the primary layer because of its lower latency.
 
@@ -519,7 +568,7 @@ The hybrid approach used in `useContractState` is robust: it uses a background p
 
 ## Conclusion
 
-You now have a complete pipeline for querying smart contract state from a React/TypeScript frontend on the Midnight network. The pattern is always the same: build an `indexerPublicDataProvider`, call the query method that works for your needs, deserialize the raw bytes with your compiled smart contract's `ledger()` constructor, and render the fields in your UI.
+You now have a complete pipeline for querying smart contract state from a React/TypeScript frontend on the Midnight network. The pattern is always the same: build an `indexerPublicDataProvider`, call the query method that works for your needs, deserialize the ledger state with your compiled smart contract's `ledger()` constructor, and render the fields in your UI.
 
 This is not limited to stablecoin vaults. Any smart contract that exposes `export ledger` fields can be queried the same way. You only need to change the ledger fields you choose to deserialize, for example `totalSupply` or `totalEmployees`, and the token colors you look up in the balance map.
 
@@ -539,4 +588,6 @@ Now that you've finished this tutorial, here are a few things you can do next:
 - **"Wallet not detected"** → Make sure 1AM or Lace browser extensions are installed
 - **Transactions failing** → Make sure you have tDUST and that the wallet is fully synced
 - **0 Values** → Make sure that the wallet is fully synced. Sometimes you need to open the wallet popup to force a sync (you could also manage this systematically)
+- **Spurious WebSocket errors in development** → React Strict Mode mounts components twice. Use a `WeakSet` to suppress errors from intentional socket closes
+- **`Invalid payload: requires tx (hex string)`** → `makeTransfer` already returns a balanced transaction. Do not pass it through `balanceUnsealedTransaction`
 - **WebSocket connectivity issues** → Make sure that your network is stable 

@@ -502,26 +502,36 @@ const handleSend = async () => {
     await sendStablecoin(recipient, BigInt(amount));
   };
 ```
-`sendStablecoin` wraps `connectedApi.makeTransfer`. Instead of sending `nativeToken`, it passes the stablecoin token ID as the `type`, so the wallet knows which asset to transfer. The `makeTransfer` call below is what actually happens inside `sendStablecoin`: it constructs the output we need, balances the transaction, and submits it.
+`sendStablecoin` wraps `connectedApi.makeTransfer`. Instead of sending `nativeToken`, it passes the stablecoin token ID as the `type`, so the wallet knows which asset to transfer. The `makeTransfer` call below is what actually happens inside `sendStablecoin`: it constructs the output we need, balances the transaction, which is then submitted with `connectedApi.submitTransaction(result.tx)`.
 
 ```typescript
-      await makeTransfer(
-        connectedApi,
-        recipient,
-        amount,
-        async () => {
-          setTransactionHash('transfer-success');
-          await loadWalletState();
-        },
-        (err) => {
-          if (err === 'Disconnected') {
-            useWalletStore.getState().resetConnection();
-            setError('Wallet disconnected. Please reconnect.');
-          } else {
-            setError(err);
-          }
-        }
-      );
+export async function sendStablecoin(
+  connectedApi: ConnectedAPI,
+  recipient: string,
+  amount: bigint,
+  onSuccess: () => void,
+  onError: (err: string) => void
+): Promise<void> {
+  try {
+    const desiredOutput: DesiredOutput = {
+      kind: 'unshielded',
+      type: STABLECOIN_TOKEN,
+      value: amount,
+      recipient,
+    };
+    const result = await connectedApi.makeTransfer([desiredOutput]);
+       if (result.tx) {
+      // wallet returned an unsigned tx — submit it
+      await connectedApi.submitTransaction(result.tx);
+    }
+    onSuccess();
+  } catch (err) {
+    if ((err as any)?.type === 'DAppConnectorAPIError' && (err as any)?.code === 'Disconnected') {
+      throw err;
+    }
+    onError(handleWalletError(err));
+  }
+}
 ```
 
 Key differences from `contractSend`

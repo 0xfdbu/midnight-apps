@@ -1,7 +1,6 @@
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
-import type { DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
-import { NATIVE_TOKEN_TYPE, STABLECOIN_TOKEN } from '../wallet.constants';
+import { STABLECOIN_TOKEN } from '../wallet.constants';
 import { handleWalletError } from '../wallet.utils';
 
 export async function connectWallet(
@@ -72,32 +71,6 @@ export async function loadWalletState(
       config,
     });
   } catch (err) {
-    onError(handleWalletError(err));
-  }
-}
-
-export async function makeTransfer(
-  connectedApi: ConnectedAPI,
-  recipient: string,
-  amount: bigint,
-  onSuccess: () => void,
-  onError: (err: string) => void
-): Promise<void> {
-  try {
-    const desiredOutput: DesiredOutput = {
-      kind: 'unshielded',
-      type: NATIVE_TOKEN_TYPE,
-      value: amount,
-      recipient,
-    };
-    const result = await connectedApi.makeTransfer([desiredOutput]);
-    const balancedResult = await connectedApi.balanceUnsealedTransaction(result.tx);
-    await connectedApi.submitTransaction(balancedResult.tx);
-    onSuccess();
-  } catch (err) {
-    if ((err as any)?.type === 'DAppConnectorAPIError' && (err as any)?.code === 'Disconnected') {
-      throw err;
-    }
     onError(handleWalletError(err));
   }
 }
