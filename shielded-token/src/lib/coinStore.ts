@@ -5,7 +5,6 @@ export interface StoredCoin {
   nonce: string;
   color: string;
   value: string;
-  mt_index?: string;
   source: 'mint' | 'mintAndSend' | 'change';
   txId: string;
   createdAt: string;
@@ -43,13 +42,6 @@ export function removeStoredCoin(id: string): void {
 
 export function clearStoredCoins(): void {
   localStorage.removeItem(STORAGE_KEY);
-}
-
-export function updateCoinMtIndex(id: string, mtIndex: string): void {
-  const coins = getStoredCoins().map((c) =>
-    c.id === id ? { ...c, mt_index: mtIndex } : c
-  );
-  saveStoredCoins(coins);
 }
 
 export function coinFromShieldedCoinInfo(

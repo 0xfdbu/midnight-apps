@@ -1,14 +1,13 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
-import { callBurnShieldedToken } from '../hooks/wallet/services/api';
+import { callDepositAndBurn } from '../hooks/wallet/services/api';
 import { hexToUint8Array, uint8ArrayToHex } from '../lib/utils';
 import { getStoredCoins, removeStoredCoin, saveStoredCoins, type StoredCoin } from '../lib/coinStore';
 
 function formatCoinLabel(coin: StoredCoin): string {
   const shortNonce = coin.nonce.slice(0, 8) + '…' + coin.nonce.slice(-8);
-  const mtHint = coin.mt_index ? ` (mt=${coin.mt_index})` : '';
-  return `Coin ${shortNonce}${mtHint} — Value: ${coin.value}`;
+  return `Coin ${shortNonce} — Value: ${coin.value}`;
 }
 
 export function BurnPage() {
@@ -22,19 +21,6 @@ export function BurnPage() {
   const [error, setError] = useState<string | null>(null);
   const [storedCoins, setStoredCoins] = useState<StoredCoin[]>(() => getStoredCoins());
   const selectedCoin = useMemo(() => storedCoins.find((c) => c.id === selectedCoinId) || null, [storedCoins, selectedCoinId]);
-
-  const [mtIndex, setMtIndex] = useState('');
-
-  // Auto-fill mt_index when a coin with a stored mt_index is selected
-  useEffect(() => {
-    if (selectedCoin?.mt_index) {
-      setMtIndex(selectedCoin.mt_index);
-    } else {
-      setMtIndex('');
-    }
-  }, [selectedCoin]);
-
-
 
   const handleBurn = async () => {
     if (!selectedCoin) {
@@ -53,10 +39,6 @@ export function BurnPage() {
       setError('Wallet not connected');
       return;
     }
-    if (!mtIndex || parseInt(mtIndex) < 0) {
-      setError('Enter the coin\'s Merkle tree index (mt_index) or use Auto-discover');
-      return;
-    }
 
     setStatus('pending');
     setError(null);
@@ -67,10 +49,9 @@ export function BurnPage() {
         nonce: hexToUint8Array(selectedCoin.nonce),
         color: hexToUint8Array(selectedCoin.color),
         value: BigInt(selectedCoin.value),
-        mt_index: BigInt(mtIndex),
       };
 
-      const result = await callBurnShieldedToken(
+      const result = await callDepositAndBurn(
         connectedApi,
         addresses.shieldedCoinPublicKey,
         addresses.shieldedEncryptionPublicKey,
@@ -168,9 +149,7 @@ export function BurnPage() {
                   <div className="flex justify-between"><span className="text-white/20">Color</span> <span className="text-white/50">{selectedCoin.color}</span></div>
                   <div className="flex justify-between"><span className="text-white/20">Value</span> <span className="text-white/50">{selectedCoin.value}</span></div>
                   <div className="flex justify-between"><span className="text-white/20">Source</span> <span className="text-white/50 capitalize">{selectedCoin.source}</span></div>
-                  {selectedCoin.mt_index && (
-                    <div className="flex justify-between"><span className="text-white/20">Merkle Index</span> <span className="text-white/50">{selectedCoin.mt_index}</span></div>
-                  )}
+
                 </div>
               </div>
             )}
@@ -185,28 +164,6 @@ export function BurnPage() {
                 placeholder={selectedCoin ? `Max: ${selectedCoin.value}` : 'Enter amount'}
                 className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15"
               />
-            </div>
-
-            <div>
-              <label className="block text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-2">Merkle Index (mt_index)</label>
-              <input
-                type="number"
-                min="0"
-                value={mtIndex}
-                onChange={(e) => { setMtIndex(e.target.value); setError(null); }}
-                placeholder={selectedCoin?.mt_index ? 'Auto-filled from stored coin' : 'Enter mt_index'}
-                className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15"
-              />
-              {!selectedCoin?.mt_index && (
-                <p className="mt-2 text-[10px] text-amber-400/40">
-                  This coin does not have a stored mt_index. Mint a new coin to have it captured automatically, or enter it manually.
-                </p>
-              )}
-              <p className="mt-2 text-[10px] text-white/15 leading-relaxed">
-                The <code className="text-white/25">mt_index</code> is the coin&apos;s position in the global Merkle tree.
-                It is required for the contract to prove the coin exists on-chain.
-                Coins minted after the update automatically capture this value.
-              </p>
             </div>
 
             {error && (
@@ -242,16 +199,14 @@ export function BurnPage() {
       <div className="p-5 bg-red-500/[0.03] border border-red-500/[0.08] rounded-2xl space-y-2">
         <p className="text-[10px] uppercase tracking-[0.1em] text-red-400/40 font-medium">Warning</p>
         <p className="text-[12px] text-red-400/60 leading-relaxed">
-          Burning tokens is irreversible. Once sent to the shielded burn address, tokens cannot be recovered. 
+          Burning tokens is irreversible. Once sent to the shielded burn address, tokens cannot be recovered.
           The contract increments the public <code className="text-red-400/80">totalBurned</code> counter.
         </p>
       </div>
 
       <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
         <p className="text-[11px] text-white/20 leading-relaxed">
-          <strong className="text-white/40">How it works:</strong> The contract uses <code className="text-white/40">sendShielded</code> to spend your coin and send it to the burn address.
-          This requires <code className="text-white/40">QualifiedShieldedCoinInfo</code> including the <code className="text-white/40">mt_index</code> for Merkle tree inclusion proof.
-          Auto-discover scans the chain state to find the correct <code className="text-white/40">mt_index</code>.
+          <strong className="text-white/40">How it works:</strong> The contract receives your coin via <code className="text-white/40">receiveShielded</code> and immediately burns it with <code className="text-white/40">sendImmediateShielded</code> in a single transaction. No Merkle tree index (<code className="text-white/40">mt_index</code>) is required — the coin is spent in the same tx it is received.
         </p>
       </div>
     </div>

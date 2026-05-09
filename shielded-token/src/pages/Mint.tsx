@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
-import { callCreateShieldedToken, callMintAndSend, resolveMtIndices } from '../hooks/wallet/services/api';
+import { callCreateShieldedToken, callMintAndSend } from '../hooks/wallet/services/api';
 import { parseKeyBytes, ZERO_BYTES32 } from '../lib/utils';
-import { addStoredCoin, coinFromShieldedCoinInfo, getStoredCoins, updateCoinMtIndex } from '../lib/coinStore';
+import { addStoredCoin, coinFromShieldedCoinInfo, getStoredCoins } from '../lib/coinStore';
 
 export function MintPage() {
   const { isConnected, connectedApi, addresses } = useWalletStore();
@@ -59,37 +59,18 @@ export function MintPage() {
         setTxHash(txId);
 
         // Store the sent coin
-        let sentCoinId: string | null = null;
         if (result?.private?.result?.sent) {
           const sent = result.private.result.sent;
           const coin = coinFromShieldedCoinInfo(sent, 'mintAndSend', txId);
           addStoredCoin(coin);
-          sentCoinId = coin.id;
           setMintedCoin({ nonce: coin.nonce.slice(0, 16) + '…', color: coin.color.slice(0, 16) + '…', value: coin.value });
         }
         // Store change if present
-        let changeCoinId: string | null = null;
         if (result?.private?.result?.change?.is_some && result?.private?.result?.change?.value) {
           const ch = result.private.result.change.value;
           const coin = coinFromShieldedCoinInfo(ch, 'change', txId);
           addStoredCoin(coin);
-          changeCoinId = coin.id;
           setChangeCoin({ nonce: coin.nonce.slice(0, 16) + '…', color: coin.color.slice(0, 16) + '…', value: coin.value });
-        }
-
-        // Resolve mt_index values from the finalized transaction
-        const contractAddress = localStorage.getItem('shielded_token_contract') || '';
-        if (contractAddress && addresses?.shieldedCoinPublicKey) {
-          resolveMtIndices(result, addresses.shieldedCoinPublicKey, contractAddress)
-            .then((mtIndices) => {
-              if (sentCoinId && mtIndices.has(sentCoinId)) {
-                updateCoinMtIndex(sentCoinId, mtIndices.get(sentCoinId)!.toString());
-              }
-              if (changeCoinId && mtIndices.has(changeCoinId)) {
-                updateCoinMtIndex(changeCoinId, mtIndices.get(changeCoinId)!.toString());
-              }
-            })
-            .catch((err) => console.error('[Mint] resolveMtIndices failed:', err));
         }
       } else {
         result = await callCreateShieldedToken(
@@ -104,24 +85,10 @@ export function MintPage() {
         setTxHash(txId);
 
         // Store the minted coin
-        let mintedCoinId: string | null = null;
         if (result?.private?.result) {
           const coin = coinFromShieldedCoinInfo(result.private.result, 'mint', txId);
           addStoredCoin(coin);
-          mintedCoinId = coin.id;
           setMintedCoin({ nonce: coin.nonce.slice(0, 16) + '…', color: coin.color.slice(0, 16) + '…', value: coin.value });
-        }
-
-        // Resolve mt_index values from the finalized transaction
-        const contractAddress = localStorage.getItem('shielded_token_contract') || '';
-        if (contractAddress && addresses?.shieldedCoinPublicKey) {
-          resolveMtIndices(result, addresses.shieldedCoinPublicKey, contractAddress)
-            .then((mtIndices) => {
-              if (mintedCoinId && mtIndices.has(mintedCoinId)) {
-                updateCoinMtIndex(mintedCoinId, mtIndices.get(mintedCoinId)!.toString());
-              }
-            })
-            .catch((err) => console.error('[Mint] resolveMtIndices failed:', err));
         }
       }
 
