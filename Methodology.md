@@ -4,7 +4,9 @@ These tutorials and the accompanying repositories are the result of a multi-laye
 
 * **Repository Engineering:** The source code was built through an intensive **"vibe-coding"** session on the **Preprod network**, where architectural decisions, debugging strategies, and integration flows emerged from direct experimentation with the Midnight SDKs and wallets (1AM, Lace). AI assisted in executing specific code changes, but all design direction and final verification was manual.
 
-* **Tutorial Construction & Audit:** AI was used to generate *initial* drafts and structural suggestions based on issues encountered during development. These prose drafts were often rough or partially inaccurate. Passages were edited, rewritten, or refined for clarity in the author's own voice and fact-checked against the actual code. Code snippets were typically preserved but audited and polished for accuracy against the existing source code. Small elements such as tables, concise explanations, and occasional lines of prose were kept verbatim when already accurate and well-written.
+* **Tutorial Construction & Audit:** AI was used to generate *initial* drafts and structural suggestions based on issues encountered during development. These prose drafts were often rough or partially inaccurate. Most prose was heavily rewritten or replaced to improve clarity and accuracy in the author's own voice. Code snippets were typically preserved but audited and polished for accuracy against the existing source code. Tables and concise explanations were kept verbatim after fact-checking. Occasional lines of prose were retained when already accurate and well-written.
+
+* **AI Tooling:** The AI assistant utilized a specialized Midnight MCP server (`midnight-mcp`) for querying official documentation, Compact syntax references, contract analysis, and TypeScript SDK patterns during both code development and tutorial drafting.
 
 * **Verification & Media:** All screenshots, transaction IDs, and console logs are direct artifacts captured from a local development environment during live testing. They serve as proof that the documented flows were executed and verified on-chain.
 
