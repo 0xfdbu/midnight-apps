@@ -6,7 +6,7 @@ These tutorials and the accompanying repositories are the result of a multi-laye
 
 * **Tutorial Construction & Audit:** AI was used to generate *initial* drafts and structural suggestions based on issues encountered during development. These prose drafts were often rough or partially inaccurate. Most prose was heavily rewritten or replaced to improve clarity and accuracy in the author's own voice. Code snippets were typically preserved but audited and polished for accuracy against the existing source code. Tables and concise explanations were kept verbatim after fact-checking. Occasional lines of prose were retained when already accurate and well-written.
 
-* **AI Tooling:** The AI assistant utilized a specialized Midnight MCP server (`midnight-mcp`) for querying official documentation, Compact syntax references, contract analysis, and TypeScript SDK patterns during both code development and tutorial drafting.
+* **AI Tooling:** The AI assistant utilized a specialized Midnight MCP server (`midnight-mcp`) for querying official documentation, verifying Compact syntax, analyzing contract structures, and looking up TypeScript SDK patterns. This tooling was used to validate technical claims during both code development and tutorial writing.
 
 * **Verification & Media:** All screenshots, transaction IDs, and console logs are direct artifacts captured from a local development environment during live testing. They serve as proof that the documented flows were executed and verified on-chain.
 
