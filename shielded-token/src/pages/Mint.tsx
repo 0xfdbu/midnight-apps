@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { callCreateShieldedToken, callMintAndSend } from '../hooks/wallet/services/api';
-import { parseKeyBytes, ZERO_BYTES32 } from '../lib/utils';
+import { parseKeyBytes, parseShieldedAddress, ZERO_BYTES32 } from '../lib/utils';
 import { addStoredCoin, coinFromShieldedCoinInfo, getStoredCoins } from '../lib/coinStore';
 
 export function MintPage() {
@@ -41,7 +41,7 @@ export function MintPage() {
 
       let result: any;
       if (mode === 'mintAndSend' && recipient.trim()) {
-        const recipientBytes = parseKeyBytes(recipient);
+        const recipientBytes = parseShieldedAddress(recipient);
         const recipientEither = {
           is_left: true,
           left: { bytes: recipientBytes },
@@ -154,15 +154,15 @@ export function MintPage() {
 
         {mode === 'mintAndSend' && (
           <div>
-            <label className="block text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-2">Recipient Shielded Key</label>
+            <label className="block text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-2">Recipient Shielded Address</label>
             <input
               type="text"
               value={recipient}
               onChange={(e) => { setRecipient(e.target.value); setError(null); }}
-              placeholder="Paste recipient shielded coin public key"
+              placeholder="Paste recipient shielded address (e.g. m1q...)"
               className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white font-mono text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15"
             />
-            <p className="text-[11px] text-white/15 mt-1.5">The recipient's shielded coin public key (32 bytes, hex or base64)</p>
+            <p className="text-[11px] text-white/15 mt-1.5">The recipient's shielded address from their wallet (Bech32m format)</p>
           </div>
         )}
 

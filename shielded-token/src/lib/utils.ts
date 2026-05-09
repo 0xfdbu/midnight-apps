@@ -66,7 +66,8 @@ export async function deriveKeyFromPassword(password: string, salt: string): Pro
   return new Uint8Array(derived);
 }
 
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { MidnightBech32m, ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { getNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 
 export const ZERO_BYTES32 = new Uint8Array(32);
 
@@ -87,6 +88,20 @@ export function parseKeyBytes(key: string): Uint8Array {
   const bytes = enc.encode(key);
   if (bytes.length === 32) return bytes;
   throw new Error(`Unable to parse key: expected 32 bytes, got ${key.length} chars`);
+}
+
+/**
+ * Parse a Bech32m shielded address (e.g. `m1q...`) and extract the 32-byte
+ * shielded coin public key that the contract expects as a recipient.
+ */
+export function parseShieldedAddress(address: string): Uint8Array {
+  try {
+    const parsed = MidnightBech32m.parse(address);
+    const shieldedAddr = ShieldedAddress.codec.decode(getNetworkId(), parsed);
+    return new Uint8Array(shieldedAddr.coinPublicKey.data);
+  } catch {
+    throw new Error('Invalid shielded address. Paste a Bech32m address starting with the network prefix.');
+  }
 }
 
 export function generateRandomPassword(): string {

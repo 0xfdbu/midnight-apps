@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { callDepositAndBurn } from '../hooks/wallet/services/api';
-import { hexToUint8Array, uint8ArrayToHex } from '../lib/utils';
-import { getStoredCoins, removeStoredCoin, saveStoredCoins, type StoredCoin } from '../lib/coinStore';
+import { hexToUint8Array } from '../lib/utils';
+import { getStoredCoins, saveStoredCoins, type StoredCoin } from '../lib/coinStore';
 
 function formatCoinLabel(coin: StoredCoin): string {
   const shortNonce = coin.nonce.slice(0, 8) + '…' + coin.nonce.slice(-8);
@@ -15,12 +15,19 @@ export function BurnPage() {
   const [selectedCoinId, setSelectedCoinId] = useState<string>('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
-
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [changeCoin, setChangeCoin] = useState<StoredCoin | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [storedCoins, setStoredCoins] = useState<StoredCoin[]>(() => getStoredCoins());
   const selectedCoin = useMemo(() => storedCoins.find((c) => c.id === selectedCoinId) || null, [storedCoins, selectedCoinId]);
+
+  // Auto-fill amount to full coin value when selection changes
+  useEffect(() => {
+    if (selectedCoin) {
+      setAmount(selectedCoin.value);
+    } else {
+      setAmount('');
+    }
+  }, [selectedCoin]);
 
   const handleBurn = async () => {
     if (!selectedCoin) {
@@ -42,7 +49,6 @@ export function BurnPage() {
 
     setStatus('pending');
     setError(null);
-    setChangeCoin(null);
 
     try {
       const coin = {
@@ -62,30 +68,10 @@ export function BurnPage() {
       const txId = result?.public?.txId || 'submitted';
       setTxHash(txId);
 
-      // If the full coin was burned, remove it from storage
-      let updatedCoins = getStoredCoins();
-      if (BigInt(amount) >= BigInt(selectedCoin.value)) {
-        removeStoredCoin(selectedCoin.id);
-        updatedCoins = updatedCoins.filter((c) => c.id !== selectedCoin.id);
-      }
-
-      // Capture change if returned
-      if (result?.private?.result?.change?.is_some && result?.private?.result?.change?.value) {
-        const ch = result.private.result.change.value;
-        const change: StoredCoin = {
-          id: uint8ArrayToHex(ch.nonce),
-          nonce: uint8ArrayToHex(ch.nonce),
-          color: uint8ArrayToHex(ch.color),
-          value: ch.value.toString(),
-          source: 'change',
-          txId,
-          createdAt: new Date().toISOString(),
-        };
-        updatedCoins = updatedCoins.filter((c) => c.id !== change.id);
-        updatedCoins.push(change);
-        saveStoredCoins(updatedCoins);
-        setChangeCoin(change);
-      }
+      // Remove the burned coin from storage. Any change stays in the
+      // contract and is not returned to the wallet.
+      let updatedCoins = getStoredCoins().filter((c) => c.id !== selectedCoin.id);
+      saveStoredCoins(updatedCoins);
       setStoredCoins(updatedCoins);
 
       setStatus('success');
@@ -128,7 +114,7 @@ export function BurnPage() {
               <label className="block text-[10px] uppercase tracking-[0.1em] text-white/20 font-medium mb-2">Select Coin</label>
               <select
                 value={selectedCoinId}
-                onChange={(e) => { setSelectedCoinId(e.target.value); setError(null); setMtIndex(''); }}
+                onChange={(e) => { setSelectedCoinId(e.target.value); setError(null); setAmount(''); }}
                 className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors appearance-none"
                 style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center' }}
               >
@@ -164,6 +150,12 @@ export function BurnPage() {
                 placeholder={selectedCoin ? `Max: ${selectedCoin.value}` : 'Enter amount'}
                 className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-white text-[13px] focus:outline-none focus:border-white/20 transition-colors placeholder:text-white/15"
               />
+              {selectedCoin && amount === selectedCoin.value && (
+                <p className="mt-1.5 text-[10px] text-emerald-400/40">Full burn — entire coin will be destroyed</p>
+              )}
+              {selectedCoin && amount !== selectedCoin.value && amount !== '' && (
+                <p className="mt-1.5 text-[10px] text-amber-400/40">Partial burn — change stays in the contract</p>
+              )}
             </div>
 
             {error && (
@@ -185,14 +177,7 @@ export function BurnPage() {
         <div className="p-5 bg-emerald-500/[0.03] border border-emerald-500/[0.1] rounded-2xl space-y-2">
           <p className="text-[10px] uppercase tracking-[0.1em] text-emerald-400/40 font-medium">Transaction Submitted</p>
           <p className="text-[12px] font-mono text-white/40 break-all">{txHash}</p>
-          {changeCoin && (
-            <p className="text-[11px] text-white/20">
-              Change of <span className="text-white/40">{changeCoin.value}</span> returned as a new shielded coin.
-            </p>
-          )}
-          {!changeCoin && (
-            <p className="text-[11px] text-white/20">Tokens have been sent to the burn address and are permanently removed from circulation.</p>
-          )}
+          <p className="text-[11px] text-white/20">Tokens burned. Any change remains in the contract. Use Send page to burn from wallet balance.</p>
         </div>
       )}
 
@@ -206,7 +191,7 @@ export function BurnPage() {
 
       <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
         <p className="text-[11px] text-white/20 leading-relaxed">
-          <strong className="text-white/40">How it works:</strong> The contract receives your coin via <code className="text-white/40">receiveShielded</code> and immediately burns it with <code className="text-white/40">sendImmediateShielded</code> in a single transaction. No Merkle tree index (<code className="text-white/40">mt_index</code>) is required — the coin is spent in the same tx it is received.
+          <strong className="text-white/40">How it works:</strong> The contract receives your coin via <code className="text-white/40">receiveShielded</code> and burns it with <code className="text-white/40">sendImmediateShielded</code>. No <code className="text-white/40">mt_index</code> is required. Note: change from partial burns stays in the contract. To burn from wallet balance, use the Send page.
         </p>
       </div>
     </div>
