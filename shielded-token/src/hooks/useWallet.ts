@@ -20,7 +20,6 @@ export interface WalletState {
   isLoadingState: boolean;
   loadWalletState: () => Promise<void>;
   isSubmitting: boolean;
-  makeTransfer: (outputs: any[]) => Promise<void>;
   setWallet: (wallet: InitialAPI | null) => void;
   setConnectedApi: (api: ConnectedAPI | null) => void;
   setIsConnecting: (connecting: boolean) => void;
@@ -87,24 +86,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       set({ error: err instanceof Error ? err.message : 'Failed to load wallet state' });
     } finally {
       set({ isLoadingState: false });
-    }
-  },
-
-  makeTransfer: async (outputs) => {
-    const { connectedApi } = get();
-    if (!connectedApi) {
-      set({ error: 'Wallet not connected' });
-      return;
-    }
-
-    set({ isSubmitting: true, error: null });
-
-    try {
-      await connectedApi.makeTransfer(outputs);
-    } catch (err) {
-      set({ error: err instanceof Error ? err.message : 'Transfer failed' });
-    } finally {
-      set({ isSubmitting: false });
     }
   },
 

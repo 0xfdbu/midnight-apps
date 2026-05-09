@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { getStoredCoins } from '../lib/coinStore';
@@ -39,7 +39,7 @@ export function SendPage() {
   }, [balances]);
 
   // Auto-select first token if none selected and options exist
-  useMemo(() => {
+  useEffect(() => {
     if (!selectedToken && tokenOptions.length > 0) {
       setSelectedToken(tokenOptions[0].color);
     }

@@ -206,50 +206,6 @@ export async function callBurnShieldedToken(
   return contract.callTx.burnShieldedToken(coin, amount);
 }
 
-export async function callDepositShielded(
-  connectedApi: ConnectedAPI,
-  coinPublicKey: string,
-  encryptionPublicKey: string,
-  coin: { nonce: Uint8Array; color: Uint8Array; value: bigint },
-  contractAddress?: string
-): Promise<any> {
-  const address = contractAddress || getStoredContractAddress() || '';
-  const privateStateProvider = await ensurePrivateState(coinPublicKey, address);
-  const providers = await buildProviders(connectedApi, coinPublicKey, encryptionPublicKey, address, privateStateProvider);
-  const contract = await getContract(providers, address);
-  return contract.callTx.depositShielded(coin);
-}
-
-export async function callBurnByNonce(
-  connectedApi: ConnectedAPI,
-  coinPublicKey: string,
-  encryptionPublicKey: string,
-  nonce: Uint8Array,
-  amount: bigint,
-  contractAddress?: string
-): Promise<any> {
-  const address = contractAddress || getStoredContractAddress() || '';
-  const privateStateProvider = await ensurePrivateState(coinPublicKey, address);
-  const providers = await buildProviders(connectedApi, coinPublicKey, encryptionPublicKey, address, privateStateProvider);
-  const contract = await getContract(providers, address);
-  return contract.callTx.burnByNonce(nonce, amount);
-}
-
-export async function callDepositAndBurn(
-  connectedApi: ConnectedAPI,
-  coinPublicKey: string,
-  encryptionPublicKey: string,
-  coin: { nonce: Uint8Array; color: Uint8Array; value: bigint },
-  amount: bigint,
-  contractAddress?: string
-): Promise<any> {
-  const address = contractAddress || getStoredContractAddress() || '';
-  const privateStateProvider = await ensurePrivateState(coinPublicKey, address);
-  const providers = wrapProvidersForDebug(await buildProviders(connectedApi, coinPublicKey, encryptionPublicKey, address, privateStateProvider));
-  const contract = await getContract(providers, address);
-  return contract.callTx.depositAndBurn(coin, amount);
-}
-
 function uint8ArrayToHex(arr: Uint8Array): string {
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 }
