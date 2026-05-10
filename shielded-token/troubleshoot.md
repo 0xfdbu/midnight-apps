@@ -77,20 +77,26 @@ Midnight-hosted proof servers have all built-in artifacts pre-loaded.
 If you need to prevent Vite's SPA fallback from poisoning artifact loads, wrap `FetchZkConfigProvider` to detect HTML and throw:
 
 ```typescript
-class ArtifactValidatingProvider extends FetchZkConfigProvider {
+class ArtifactValidatingProvider implements ZKConfigProvider<string> {
+  #base: ZKConfigProvider<string>;
+
+  constructor(base: ZKConfigProvider<string>) {
+    this.#base = base;
+  }
+
   async getProverKey(circuitId: string) {
-    const key = await super.getProverKey(circuitId);
-    this.validate(key, `${circuitId}.prover`);
+    const key = await this.#base.getProverKey(circuitId);
+    this.validate(key as Uint8Array, `${circuitId}.prover`);
     return key;
   }
   async getVerifierKey(circuitId: string) {
-    const key = await super.getVerifierKey(circuitId);
-    this.validate(key, `${circuitId}.verifier`);
+    const key = await this.#base.getVerifierKey(circuitId);
+    this.validate(key as Uint8Array, `${circuitId}.verifier`);
     return key;
   }
   async getZKIR(circuitId: string) {
-    const zkir = await super.getZKIR(circuitId);
-    this.validate(zkir, `${circuitId}.bzkir`);
+    const zkir = await this.#base.getZKIR(circuitId);
+    this.validate(zkir as Uint8Array, `${circuitId}.bzkir`);
     return zkir;
   }
   private validate(data: Uint8Array, name: string) {
@@ -104,11 +110,209 @@ class ArtifactValidatingProvider extends FetchZkConfigProvider {
 }
 ```
 
-This causes `getKeyMaterial()` to return `undefined` for missing artifacts, letting the proof server or wallet use its own fallback store.
+This causes the provider to throw for missing artifacts, letting the wallet or proof server use its own fallback store.
 
-### Related Files
+---
+
+## "Public transcript input mismatch" on `transferShielded` or `burnShieldedToken`
+
+### Symptom
+When calling `transferShielded` or `burnShieldedToken` (both use `sendShielded`), the proof generation fails with:
+
+```
+Public transcript input mismatch
+```
+
+### Root Cause
+
+`sendShielded` requires a `QualifiedShieldedCoinInfo`, which includes `mt_index` — the Merkle tree index proving the coin was committed to the on-chain zswap tree. The wallet, prover, and verifier must all agree on the current Merkle root.
+
+For freshly minted or received coins, the wallet's local zswap state is often out of sync with the verifier's expected root. Even with a correct `mt_index`, the Merkle inclusion proof may not verify against the root the verifier expects.
+
+### Why `mintAndSend` and `depositAndBurn` Avoid This
+
+These circuits use `sendImmediateShielded` instead of `sendShielded`. `sendImmediateShielded` pairs the mint/receive and spend claims within the same transaction using `mt_index: 0`. No on-chain Merkle path is needed because the kernel handles the pairing internally.
+
+### Solutions
+
+- **For sends:** Use `connectedApi.makeTransfer()` instead of `transferShielded`. The wallet handles coin selection, change, and proving internally without requiring `mt_index`.
+- **For burns:** Use `depositAndBurn` (for stored coins) or `makeTransfer` to the burn address (for wallet balance).
+- **For cross-transaction contract transfers:** You would need to store `mt_index` alongside each coin and ensure the wallet has synced to the block where the coin was committed. This is fragile and not recommended for browser DApps.
+
+---
+
+## Burn Page: "Cannot access before initialization" (Temporal Dead Zone)
+
+### Symptom
+The Burn page crashes on render with:
+
+```
+ReferenceError: Cannot access 'selectedCoin' before initialization
+```
+
+### Root Cause
+
+`selectedCoin` was computed with `useMemo` but then referenced in a `useEffect` or callback declared earlier in the component. In React's render cycle, `useMemo` values are not available to hooks declared before them.
+
+### Fix
+
+Move the `useEffect` that depends on `selectedCoin` **after** the `selectedCoin` declaration, and use `useEffect` (not `useMemo`) for side effects like auto-filling the amount:
+
+```typescript
+const selectedCoin = useMemo(
+  () => storedCoins.find((c) => c.id === selectedCoinId) || null,
+  [storedCoins, selectedCoinId]
+);
+
+useEffect(() => {
+  if (selectedCoin) {
+    setAmount(selectedCoin.value);
+  } else {
+    setAmount('');
+  }
+}, [selectedCoin]);
+```
+
+---
+
+## Burn Page: Partial Burn Change Locked in Contract
+
+### Symptom
+After a partial burn, the remaining change does not appear in the wallet balance.
+
+### Root Cause
+
+`depositAndBurn` uses `sendImmediateShielded`, which sends change to `kernel.self()` — the contract address — not the user's wallet. The contract has no circuit to spend its own shielded outputs later. This is a contract-level limitation.
+
+### Fix
+
+Default the burn amount to the coin's full value and show a visual indicator:
+
+- **Full burn** (green): amount equals coin value — no change.
+- **Partial burn** (amber): amount is less than coin value — change stays in contract.
+
+Do not store partial-burn change coins in `localStorage`; they are not recoverable by the user.
+
+---
+
+## Mint Page: "Invalid shielded address"
+
+### Symptom
+The Mint & Send form rejects recipient addresses with:
+
+```
+Invalid shielded address. Paste a Bech32m address starting with the network prefix.
+```
+
+### Root Cause
+
+The recipient field expects a Bech32m shielded address (e.g., `mid1...`), not a raw hex or base64 coin public key. The contract's `Either<ZswapCoinPublicKey, ContractAddress>` requires a 32-byte `ZswapCoinPublicKey`, which must be extracted from the shielded address.
+
+### Fix
+
+Use `parseShieldedAddress` to decode the Bech32m address:
+
+```typescript
+export function parseShieldedAddress(address: string): Uint8Array {
+  const parsed = MidnightBech32m.parse(address);
+  const shieldedAddr = ShieldedAddress.codec.decode(getNetworkId(), parsed);
+  return new Uint8Array(shieldedAddr.coinPublicKey.data);
+}
+```
+
+This extracts the 32-byte coin public key from the wallet's displayed shielded address format.
+
+---
+
+## Wallet Disconnect / Timeout During Proving
+
+### Symptom
+The wallet extension closes or times out while generating a ZK proof, leaving the DApp in a disconnected state.
+
+### Root Cause
+
+Shielded proofs are computationally expensive. The wallet may close its popup or timeout if the user leaves it idle, or if the proof generation exceeds the wallet's internal timeout.
+
+### Solutions
+
+- Reconnect the wallet and retry the transaction.
+- Ensure the wallet extension is the active tab and not backgrounded.
+- If using Lace, check that the wallet is unlocked before initiating the transaction.
+- The DApp should handle `DAppConnectorAPIError` with code `'Disconnected'` and prompt the user to reconnect:
+
+```typescript
+if ((err as any)?.type === 'DAppConnectorAPIError' && (err as any)?.code === 'Disconnected') {
+  // Prompt user to reconnect wallet
+}
+```
+
+---
+
+## Shielded Balance Shows 0 After Mint
+
+### Symptom
+After successfully minting tokens, the Home page shows 0 shielded balance.
+
+### Root Cause
+
+Shielded coins are private. The wallet decrypts balances locally using the viewing key, but this requires the wallet to have synced the new block containing the mint transaction. There is a natural delay between transaction submission and wallet sync.
+
+### Fix
+
+The Home page auto-refreshes balances every 15 seconds via `setInterval`. If the balance is still 0:
+
+- Open the wallet extension to trigger a manual sync.
+- Wait for the next block to be indexed.
+- Verify the transaction was submitted successfully (check the transaction hash).
+
+---
+
+## "No compatible wallet found"
+
+### Symptom
+The DApp cannot detect the wallet extension.
+
+### Root Cause
+
+The DApp Connector API version check fails. The wallet extension's API version is outside the expected `'4.x'` range.
+
+### Fix
+
+Update the wallet extension (Lace or 1AM) to the latest version. The DApp targets dApp Connector API `4.0.1`.
+
+---
+
+## Burn: Stored Coins vs Wallet Balance
+
+### Symptom
+The Burn page dropdown is empty even though the wallet shows a shielded balance.
+
+### Root Cause
+
+The Burn page only shows **stored coins** from `localStorage` (coins minted by the DApp). It cannot burn coins that were received from other wallets because the DApp Connector API does not expose individual coin nonces for received coins.
+
+The wallet's shielded balance includes all coins the wallet knows about, but the contract's `depositAndBurn` circuit needs the exact `nonce`, `color`, and `value` of a specific coin.
+
+### Solutions
+
+| What you want to burn | Use |
+|---|---|
+| Coins minted by this DApp | Burn page with `depositAndBurn` |
+| Coins received from other wallets | Send page with `makeTransfer` to burn address |
+
+Burning via `makeTransfer` does not update the contract's `totalBurned` counter, but it works with any wallet balance.
+
+---
+
+## Related Files
 
 - `src/hooks/wallet/services/providers.ts` — provider construction
 - `src/hooks/wallet/services/api.ts` — contract call helpers
+- `src/hooks/wallet/services/contract.ts` — witness bindings
+- `src/pages/Burn.tsx` — burn UI with full/partial burn indicators
+- `src/pages/Mint.tsx` — mint UI with `parseShieldedAddress`
+- `src/pages/Send.tsx` — wallet-native `makeTransfer`
+- `src/lib/coinStore.ts` — local coin inventory
+- `src/lib/utils.ts` — address parsing utilities
 - `src/contracts/keys/` — prover/verifier keys (contract circuits only)
 - `src/contracts/zkir/` — ZKIR files (contract circuits only)

@@ -184,13 +184,6 @@ const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, led
 
 **2. Build providers**
 
-- `privateStateProvider`: uses `levelPrivateStateProvider` for persistent localStorage
-- `publicDataProvider`: reads on-chain state from the indexer
-- `zkConfigProvider`: loads `FetchZkConfigProvider` — compiled verifiers...
-- `proofProvider`: generates zero-knowledge proofs on your proof server
-- `walletProvider`: handles `balanceTx` via `connectedApi.balanceUnsealedTransaction`
-- `midnightProvider`: submits transactions via `connectedApi.submitTransaction`
-
 ```typescript
 const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
 const levelPrivateStateProvider = levelModule.levelPrivateStateProvider;

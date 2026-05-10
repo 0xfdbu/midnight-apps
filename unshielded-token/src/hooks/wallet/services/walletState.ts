@@ -98,11 +98,20 @@ export async function sendStablecoin(
       value: amount,
       recipient,
     };
-    const result = await connectedApi.makeTransfer([desiredOutput]);
-       if (result.tx) {
-      // wallet returned an unsigned tx — submit it
-      await connectedApi.submitTransaction(result.tx);
+    const result: any = await connectedApi.makeTransfer([desiredOutput]);
+    console.log('[sendStablecoin] makeTransfer result:', result);
+
+    if (result.tx_id) {
+      onSuccess();
+      return;
     }
+
+    if (result.tx) {
+      await connectedApi.submitTransaction(result.tx);
+      onSuccess();
+      return;
+    }
+
     onSuccess();
   } catch (err) {
     if ((err as any)?.type === 'DAppConnectorAPIError' && (err as any)?.code === 'Disconnected') {

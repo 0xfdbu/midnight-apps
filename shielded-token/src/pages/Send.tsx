@@ -77,18 +77,26 @@ export function SendPage() {
       const desiredOutput = { kind: 'shielded' as const, type: selectedToken, value, recipient: recipientClean };
       console.log('[Send] desiredOutput:', JSON.stringify(desiredOutput, (_, v) => typeof v === 'bigint' ? v.toString() : v));
 
-      // makeTransfer for shielded tokens already submits the transaction internally.
-      // It returns { tx_id: string }, not { tx: string }.
       const result: any = await connectedApi.makeTransfer([desiredOutput]);
       console.log('[Send] makeTransfer result:', result);
 
-      const txId = result?.tx_id || result?.tx;
-      if (!txId) {
-        throw new Error('makeTransfer returned no transaction identifier');
+      // Shielded makeTransfer auto-submits and returns { tx_id }. Unshielded returns { tx }.
+      const txId = result?.tx_id;
+      if (txId) {
+        setTxHash(txId);
+        setStatus('success');
+        return;
       }
 
-      setTxHash(txId.slice(0, 64));
-      setStatus('success');
+      const txToSubmit = result?.tx;
+      if (txToSubmit) {
+        await connectedApi.submitTransaction(txToSubmit);
+        setTxHash('transfer-success');
+        setStatus('success');
+        return;
+      }
+
+      throw new Error('makeTransfer returned no transaction identifier');
     } catch (err) {
       console.error('[Send] Error:', err);
       setError(err instanceof Error ? err.message : 'Send failed');
