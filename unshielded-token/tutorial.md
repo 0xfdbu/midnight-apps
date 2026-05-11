@@ -39,7 +39,7 @@ npm install
 npm run dev
 ```
 
-With the frontend ready to connect, the next step is the smart contract side. Here are three core circuits that handle the native mint for the unshielded token vault lifecycle:
+Now that you have a frontend that's ready to connect, the next step is to build the compact smart contract. Here are three core circuits that handle the native mint for unshielded token vault lifecycle:
 
 **Natively minting a stablecoin into the vault with `mintUnshieldedToken`**
 
@@ -128,7 +128,7 @@ A simple approach to quickly deploy and save time of wallet syncing by using you
 
 ## Frontend integration
 
-Now that the smart contract is deployed on Preprod, the next step is to integrate it with the frontend. The features to cover are shown in the screenshot below:
+Now that your smart contract is deployed on the Preprod network, the next step is to integrate it with the frontend. Features to cover are shown below in the screenshot:
 
 1. Smart contract operations: mint tokens into the vault, send tokens from the vault to an address, and deposit tokens into the vault.
 2. Statistics: total supply, smart contract (vault) balance, wallet balance.
