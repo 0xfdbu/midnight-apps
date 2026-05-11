@@ -4,7 +4,7 @@
 
 This tutorial walks you through building a complete shielded token DApp on the Midnight network. You will deploy a Compact smart contract, implement operations such as minting, transferring, and burning tokens, generate zero-knowledge proofs, and build a React frontend that lets users interact with shielded tokens in the browser.
 
-Shielded tokens differ from unshielded tokens in that all balances and amounts remain hidden from on-chain explorers. Only the wallet owner can decrypt their balances locally. The contract proves correctness via zero-knowledge proofs without revealing any sensitive values. Public state variables such as `totalSupply` and `totalBurned` track aggregate metrics, while individual coin values, recipients, and the transaction graph remain private. 
+Shielded tokens differ from unshielded tokens in that all balances and amounts remain hidden from on-chain explorers. Only the wallet owner can decrypt their balances locally. The smart contract proves correctness via zero-knowledge proofs without revealing any sensitive values. Public state variables such as `totalSupply` and `totalBurned` track aggregate metrics, while individual coin values, recipients, and the transaction graph remain private.
 
 ---
 
@@ -35,7 +35,7 @@ The smart contract for shielded tokens resides in `contracts/Token.compact`. It 
 
 ### Public ledger state
 
-Create these two essential public counters to track the token(s) lifecycle:
+Create these two essential public counters to track the token lifecycle:
 
 ```compact
 
@@ -189,7 +189,7 @@ export circuit nextNonce(index: Uint<128>, currentNonce: Bytes<32>): Bytes<32> {
 }
 ```
 
-`evolveNonce` is used to derive the next nonce from a counter index and current nonce, it's useful for applications requiring deterministic nonce sequences.
+`evolveNonce` is used to derive the next nonce from a counter index and current nonce; it's useful for applications requiring deterministic nonce sequences.
 
 View the full contract in [`Token.compact`](https://github.com/0xfdbu/midnight-apps/blob/main/shielded-token/contracts/Token.compact).
 
@@ -212,13 +212,13 @@ This will generate files and folders such as `keys` and `zkir`, all of which are
 
 ![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/1ru32dsi7f9boujot6oj.png)
 
-> **Note:** You can skip this step if you cloned the repo, as compiled artifacts are already included. However, if you recompile, you will not be able to use the deployed smart contract because the old verification keys will no longer match. 
+> **Note:** You can skip this step if you cloned the repo, as compiled artifacts are already included. However, if you recompile, you will not be able to use the deployed smart contract because the old verification keys will no longer match.
 
 ---
 
 ## 2. React UI implementation
 
-Using the smart contract generated artifacts in `src/contracts` from the frontend involves a few steps:
+Using the smart contract-generated artifacts in `src/contracts` from the frontend involves a few steps:
 
 ### Wallet provider setup
 
@@ -308,15 +308,15 @@ connect: async (networkId = NETWORK_ID) => {
 },
 ```
 
-Or if you want, you can use a start i built [dapp-connect](https://github.com/0xfdbu/midnight-apps/tree/main/dapp-connect).
+Or if you want, you can use a starter I built, [dapp-connect](https://github.com/0xfdbu/midnight-apps/tree/main/dapp-connect).
 
-First start by cloning the repository 
+First, start by cloning the repository.
 
 ```shell
 git clone https://github.com/0xfdbu/midnight-apps.git
 ```
 
-Run the starter and install dependencies
+Run the starter and install dependencies.
 
 ```shell
 cd midnight-apps/dapp-connect
@@ -324,7 +324,7 @@ npm install
 npm run dev
 ```
 
-### Building the providers and the Typescript API
+### Building the providers and the TypeScript API
 
 Before continuing, you need a helper function to build the providers.
 
@@ -341,7 +341,11 @@ import { dappConnectorProofProvider } from '@midnight-ntwrk/midnight-js-dapp-con
 import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
 import { toHex, fromHex } from '@midnight-ntwrk/midnight-js-utils';
 import { Transaction, CostModel } from '@midnight-ntwrk/ledger-v8';
+```
 
+Provider builder function:
+
+``` typescript
 export async function buildProviders(
   connectedApi: ConnectedAPI,
   coinPublicKey: string,
@@ -389,7 +393,7 @@ export async function buildProviders(
 }
 ```
 
-Now proceed to create the hook for the Typescript API, these are some of the essential imports for the API 
+Now proceed to create the hook for the TypeScript API. These are some of the essential imports for the API
 
 ```typescript
 // src/hooks/wallet/services/api.ts
@@ -405,7 +409,7 @@ import { CompiledContract } from '@midnight-ntwrk/compact-js';
 
 ### Deploying the smart contract
 
-`deployTokenContract` creates a `CompiledContract` instance, binds the `localNonce` witness, attaches the compiled ZK artifacts, and calls `deployContract` with the providers. The deployed contract address is persisted in `localStorage` so the frontend can reconnect after a page reload:
+`deployTokenContract` builds a `CompiledContract` instance, binds the `localNonce` witness, attaches the compiled ZK artifacts, and then calls `deployContract` with the providers:
 
 ```typescript
 // src/hooks/wallet/services/api.ts
@@ -443,15 +447,49 @@ export async function deployTokenContract(
 }
 ```
 
-This deploys the contract, stores the address in `localStorage` under `shielded_token_contract`, and returns it so the frontend can use it for subsequent calls.
+Wire `deployTokenContract` into the frontend
 
----
+```typescript
+// src/pages/Deploy.tsx
+// Other imports
+import { useWalletStore } from '../hooks/useWallet';
+import { deployTokenContract } from '../hooks/wallet/services/api';
 
-## 3. Minting tokens
+  const handleDeploy = async () => {
+    if (!connectedApi || !addresses?.shieldedCoinPublicKey || !addresses?.shieldedEncryptionPublicKey) {
+      setError('Wallet not fully connected');
+      return;
+    }
+    setStatus('pending');
+    setError(null);
+
+    try {
+      const addr = await deployTokenContract(
+        connectedApi,
+        addresses.shieldedCoinPublicKey,
+        addresses.shieldedEncryptionPublicKey
+      );
+      setContractAddress(addr);
+      setStatus('success');
+    } catch (err) {
+      console.error('[Deploy] Error:', err);
+      setError(err instanceof Error ? err.message : 'Deployment failed');
+      setStatus('error');
+    }
+  };
+```
+
+![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/z2te4bhfpoyt9smo8xol.png)
+
+The smart contract address is then saved to `localStorage`.
+
+> **Note:** The same API pattern used in `deployTokenContract` will be used for calling the compiled circuits. View full API [api.ts](https://github.com/0xfdbu/midnight-apps/blob/main/shielded-token/src/hooks/wallet/services/api.ts)
+
+### Minting tokens
 
 The Mint page has two modes: **Mint to Self** and **Mint & Send**.
 
-**Mint to Self** calls `createShieldedToken` and sends the coin to the user's own shielded coin public key:
+**Mint to Self** calls `createShieldedToken` and sends the minted coin into the user's shielded coin public key:
 
 ```typescript
 const selfRecipient = {
@@ -469,9 +507,12 @@ const result = await callCreateShieldedToken(
 );
 ```
 
-The returned `ShieldedCoinInfo` contains `nonce`, `color`, and `value`. This is immediately saved to `localStorage` via `coinStore.ts` so the Burn page can reference it later.
 
-**Mint & Send** calls `mintAndSend` and forwards the freshly minted coin to a recipient's shielded address:
+![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/bekl3z9psnkc6trlkm9m.png)
+
+When a mint is successful, `Nonce`, `Color`, and `Value` are stored in `localStorage` so they can be referenced later during the burn phase.
+
+**Mint & Send** calls `mintAndSend` and sends the freshly minted coins to the address the user entered:
 
 ```typescript
 const recipientBytes = parseShieldedAddress(recipient);
@@ -489,28 +530,33 @@ const result = await callMintAndSend(
   recipientEither
 );
 ```
-
-`parseShieldedAddress` extracts the 32-byte coin public key from a Bech32m shielded address:
+A small utility function, `parseShieldedAddress`, extracts the 32 bytes from the user-typed shielded address
 
 ```typescript
+/**
+ * Parse a Bech32m shielded address (e.g. `m1q...`) and extract the 32-byte
+ * shielded coin public key that the smart contract expects as a recipient.
+ */
 export function parseShieldedAddress(address: string): Uint8Array {
-  const parsed = MidnightBech32m.parse(address);
-  const shieldedAddr = ShieldedAddress.codec.decode(getNetworkId(), parsed);
-  return new Uint8Array(shieldedAddr.coinPublicKey.data);
+  try {
+    const parsed = MidnightBech32m.parse(address);
+    const shieldedAddr = ShieldedAddress.codec.decode(getNetworkId(), parsed);
+    return new Uint8Array(shieldedAddr.coinPublicKey.data);
+  } catch {
+    throw new Error('Invalid shielded address. Paste a Bech32m address starting with the network prefix.');
+  }
 }
 ```
 
-This accepts the same Bech32m format the wallet displays, so users can copy-paste directly from the wallet extension.
+![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/do8qhow4kyd91tx6fqh1.png)
 
-After a successful mint, the returned `ShieldedCoinInfo` is saved to `localStorage` via `coinStore.ts`. This inventory is used by the Burn page to let users select coins without manually entering hex nonces.
+When a mint is successful, `Nonce`, `Color`, and `Value` are stored in `localStorage` so they can be referenced later during the burn phase. This means users won't need to enter the values manually when they are already stored in `localStorage`.
 
-> **Note:** `createShieldedToken` returns a single `ShieldedCoinInfo`, while `mintAndSend` returns a `ShieldedSendResult` containing `sent` and `change`. For `mintAndSend` with exact amounts, `change` is typically `None`.
+> **Note:** The `createShieldedToken` circuit returns `ShieldedCoinInfo`, while the `mintAndSend` circuit returns a `ShieldedSendResult` containing `sent` and `change`. For `mintAndSend` with exact amounts, `change` is typically `None`.
 
----
+### Coin storage
 
-## 4. Coin storage
-
-Because shielded coins are private, the wallet does not expose an API to enumerate individual coins with their nonces. The DApp must store mint results locally:
+Shielded coins are different from unshielded ones: they are private, and the wallet does not expose an API to enumerate them with their nonces, so the DApp stores mint results in `localStorage`.
 
 ```typescript
 export interface StoredCoin {
@@ -524,13 +570,11 @@ export interface StoredCoin {
 }
 ```
 
-`saveStoredCoins` and `getStoredCoins` manage this inventory. Mint and burn pages read and write this store. The Send page does not need it because `makeTransfer` handles coin selection internally.
+Mint page writes using `saveStoredCoins` and burn page reads using `getStoredCoins`. Sending tokens from wallet does not require reading or writing.
 
----
+### Sending tokens
 
-## 5. Sending tokens
-
-The Send page uses the wallet's native `makeTransfer` for shielded transfers. The wallet handles coin selection, change management, and ZK proving internally. After `makeTransfer` returns the serialized transaction, you must call `submitTransaction` to broadcast it:
+The send page uses the wallet's native `makeTransfer` for shielded transfers. The wallet handles everything, including proving; however, you still need to call `submitTransaction` to broadcast it:
 
 ```typescript
 const desiredOutput = {
@@ -546,18 +590,12 @@ if (result.tx) {
 }
 ```
 
-This is the recommended path for sending shielded tokens between wallets because:
-- No `mt_index` required
-- Wallet handles coin selection and change automatically
-- No risk of locking change in the contract
+`makeTransfer` is the most convenient way of sending shielded tokens using the DApp Connector API.
 
-The trade-off is that `makeTransfer` does not update the contract's `totalBurned` counter when sending to the burn address. For burns that update `totalBurned`, use the Burn page with `depositAndBurn`.
+### Burning tokens
 
----
+The Burn page uses the `depositAndBurn` circuit to destroy stored coins
 
-## 6. Burning tokens
-
-The Burn page uses `depositAndBurn` to destroy stored coins. The amount auto-fills to the coin's full value by default:
 
 ```typescript
 const coin = {
@@ -575,22 +613,22 @@ const result = await callDepositAndBurn(
 );
 ```
 
-After burning, the coin is removed from local storage:
+After burning, the coin is removed from `localStorage`.
 
 ```typescript
 const updatedCoins = getStoredCoins().filter((c) => c.id !== selectedCoin.id);
 saveStoredCoins(updatedCoins);
 ```
 
-> **Caveat:** `sendImmediateShielded` sends change to `kernel.self()` (the contract). A partial burn leaves a contract-owned shielded output that is not tracked anywhere. The UI enforces full-burn by default to avoid this, showing a green "Full burn" indicator or an amber warning for partial burns.
+![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/0jjlnd47pzj0g5fr7msn.png)
 
----
+> **Caveat:** `sendImmediateShielded` sends change to `kernel.self()` (smart contract). Therefore, a partial burn leaves a contract-owned shielded output that is not tracked anywhere, which is why the UI enforces a full burn by default to avoid this.
 
-## 7. Home and balance display
+### Home and balance display
 
-The Home page displays three categories of information:
+The main dashboard displays 3 types of data:
 
-**Shielded balance** — the wallet store auto-refreshes every 15 seconds via `loadWalletState()`, which internally calls `connectedApi.getShieldedBalances()`. The Home page reads from the store and sums all shielded entries:
+**Shielded balance(s)** - it displays the combined balance of tokens, `shieldedBalanceTotal`, that enumerates across all balances. It also calls `connectedApi.getShieldedBalances()` internally and refreshes every 15 seconds:
 
 ```typescript
 const { balances, loadWalletState } = useWalletStore();
@@ -610,9 +648,7 @@ const shieldedBalanceTotal = (() => {
 })();
 ```
 
-**Stored coins** — the local inventory of minted coins from `coinStore.ts`.
-
-**Contract stats** — `totalSupply` and `totalBurned` are fetched via the `getContractState` helper, which queries the indexer and deserializes the raw bytes through the contract's `ledger()` function:
+**Contract states** like `totalSupply` and `totalBurned` are fetched via the `getContractState` helper, which uses `ledger()` to deserialize the raw bytes into readable data.
 
 ```typescript
 const [stats, setStats] = useState<{ totalSupply: bigint; totalBurned: bigint } | null>(null);
@@ -624,81 +660,49 @@ useEffect(() => {
 }, [contractAddress]);
 ```
 
-Shielded balances are private — the UI shows them only because the wallet decrypts them locally using the user's viewing key. On-chain observers see only opaque commitments. Public state like `totalSupply` is visible to anyone because it contains no private data.
+![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/mu2m532x96rkjppm869p.png)
 
 ---
 
-## 8. The mint-and-send atomic pattern
+## 3. The mint-and-send atomic pattern
 
-The `mintAndSend` pattern is worth understanding because it solves a critical problem in shielded token design.
+The `mintAndSend` circuit pattern solves a critical problem in shielded token design.
 
-**The problem:** A freshly minted shielded coin is not immediately spendable via `sendShielded` because it has not yet been committed to the on-chain Merkle tree. If you mint a coin in transaction N, you cannot independently spend it in transaction N+1 without waiting for it to be included in the Merkle tree and obtaining its `mt_index`.
+The main **issue** is that a freshly minted shielded coin is not immediately spendable via `sendShielded` when it has not yet been committed to the Merkle tree. If you mint a coin in transaction X, you cannot spend it in transaction X+1 without waiting for it to be included in the Merkle tree and obtaining its `mt_index`.
 
-**The solution:** `sendImmediateShielded` bypasses the Merkle qualification by using `mt_index: 0`. The kernel recognizes that the coin was created in the same transaction and pairs the mint/spend claims internally. This is only possible when both operations happen in the same circuit.
+`sendImmediateShielded` is different, it bypasses the Merkle qualification by using `mt_index: 0`.
 
-**The contract pattern:**
-1. `mintShieldedToken(..., kernel.self())` — mint to contract
-2. `sendImmediateShielded(coin, recipient, amount)` — forward to final recipient
+**The circuit pattern:**
+1. `mintShieldedToken(..., kernel.self())` — mint shielded coins to the kernel (smart contract)
+2. `sendImmediateShielded(coin, recipient, amount)` — forward to the recipient
 
-This is atomic: either both steps succeed or the entire transaction fails. The recipient receives a fully qualified shielded coin that they can spend in future transactions via `sendShielded` once it has been committed to the Merkle tree.
+Either both steps succeed, or the entire transaction fails. The recipient receives a fully qualified shielded coin that is spendable in future transactions with `sendShielded` once it is committed to the Merkle tree.
 
-The same pattern applies to `depositAndBurn`:
-1. `receiveShielded(coin)` — bring user's coin into the transaction
-2. `sendImmediateShielded(coin, burnAddr, amount)` — burn it immediately
+`depositAndBurn` circuit pattern:
+1. `receiveShielded(coin)` — deposits user coins into the transaction
+2. `sendImmediateShielded(coin, burnAddr, amount)` — burn it immediately in the same transaction
 
-Without this atomic pattern, the only way to burn a shielded coin through the contract would be to use `sendShielded` with `mt_index`, which requires the coin to have been committed to the Merkle tree first.
+This atomic pattern makes it possible to burn a shielded coin through the smart contract without using `sendShielded` with `mt_index`, which **requires** the commitment of the coin to the Merkle tree.
 
 ---
 
-## 9. Key architectural decisions
+## 4. Key architectural decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Proving strategy | `dappConnectorProofProvider` (wallet-backed) | Built-in ledger circuits like `output` are not generated by the Compact compiler; the wallet has them |
-| Send path | Wallet `makeTransfer` for transfers, contract `depositAndBurn` for burns | `makeTransfer` handles change correctly; contract burns update `totalBurned` |
-| Coin storage | `localStorage` via `coinStore.ts` | The DApp Connector API does not expose individual coin nonces; storing mint results enables contract burns |
-| Burn default | Full burn | Partial burns via `depositAndBurn` lock change in the contract |
+| Send path | Wallet `makeTransfer` for transfers, smart contract `depositAndBurn` for burns | `makeTransfer` handles change correctly; smart contract burns update `totalBurned` |
+| Coin storage | `localStorage` via `coinStore.ts` | The DApp Connector API does not expose individual coin nonces; storing mint results enables smart contract burns |
+| Burn default | Full burn | Partial burns via `depositAndBurn` lock change in the smart contract |
 | Network | Preprod | Testnet with faucet support |
-
----
-
-## Troubleshooting
-
-### `BalanceCheckOverspend` (error 138) when burning
-
-**Symptom:** Burning a stored coin fails with `Invalid Transaction: Custom error: 138`.
-
-**Cause:** The coin was already spent via `makeTransfer` (Send page) but still exists in `localStorage`. The Burn page dropdown shows stale coins. When `depositAndBurn` calls `receiveShielded`, the wallet cannot find the coin to spend — it was already consumed in a previous wallet-native transfer.
-
-**Fix:** Cross-check stored coins against the wallet's actual shielded balances before burning. A coin is only burnable if the wallet still recognizes it. To clear stale inventory:
-
-```typescript
-const storedCoins = getStoredCoins();
-const balances = await connectedApi.getShieldedBalances();
-const validCoins = storedCoins.filter((c) => {
-  const balance = balances[c.color] ?? 0n;
-  return balance >= BigInt(c.value);
-});
-saveStoredCoins(validCoins);
-```
-
-Or simply clear `localStorage` and re-mint if you only need fresh coins for testing.
-
-> **Note:** This is a fundamental limitation of the DApp/wallet boundary. The wallet handles `makeTransfer` coin selection privately and never tells the DApp which specific coins were spent. The DApp's `localStorage` inventory becomes stale whenever coins are spent outside of contract burns.
 
 ---
 
 ## Conclusion
 
-You now have a complete shielded token DApp that demonstrates:
+You have now built a complete shielded token DApp that demonstrates the ability to mint privacy-preserving tokens with `mintShieldedToken`, atomically forward freshly minted coins with `sendImmediateShielded`, burn tokens with `receiveShielded` + `sendImmediateShielded`, and finally build a React frontend with deploy, mint, send, burn, and balance display.
 
-- Minting privacy-preserving tokens with `mintShieldedToken`
-- Atomically forwarding freshly minted coins with `sendImmediateShielded`
-- Burning tokens via `receiveShielded` + `sendImmediateShielded`
-- Wallet-backed ZK proving without a local proof server
-- A React frontend with deploy, mint, send, burn, and balance flows
-
-The critical insight for shielded tokens on Midnight is the distinction between `sendImmediateShielded` (same-transaction, no Merkle path) and `sendShielded` (cross-transaction, requires `mt_index`). Getting this right determines whether your minted coins are immediately usable or locked until the next block.
+It is important to distinguish between `sendImmediateShielded` (bypasses Merkle path before spending) and `sendShielded` (requires `mt_index`). Understanding this correctly determines whether the coins you minted are immediately spendable or locked.
 
 ## Next steps
 
@@ -706,3 +710,14 @@ The critical insight for shielded tokens on Midnight is the distinction between 
 - Read the Midnight Compact language docs
 - Experiment with `transferShielded` by storing `mt_index` for committed coins
 - Add admin authentication to restrict minting privileges
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Shielded balance shows 0 after mint | Wallet hasn't synced the mint block yet | Wait 15s (auto-refresh) or open wallet extension to trigger sync |
+| Burn page empty dropdown | Burn only shows DApp-minted coins, not wallet-received coins | Use Send page (`makeTransfer` to burn address) for wallet balance burns |
+| Wallet disconnects during proving | ZK proof generation timed out in wallet popup | Reconnect wallet, ensure extension is active and unlocked |
+| `"Invalid shielded address"` on Mint & Send | Recipient field expects Bech32m, not raw hex | Use `parseShieldedAddress()` to decode the wallet's shielded address |
+| `Invalid Transaction: Custom error: 138` on burn | 1AM wallet dust sponsoring interferes with contract call balancing | Turn off dust sponsoring in 1AM wallet settings |
+| `"No compatible wallet found"` | Extension API version outside `4.x` | Update Lace or 1AM to latest version |
