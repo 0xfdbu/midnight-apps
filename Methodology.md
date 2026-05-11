@@ -12,10 +12,6 @@ This document explains how these tutorials and repositories were built, who wrot
 | **DApp Connector API** | 4.0.1 |
 | **Wallets tested** | 1AM (primarly everywhere) , Lace (minimally and before v2) , GSD (connection only) |
 
-## How this was built
-
-The code and documentation were produced concurrently through iterative AI-assisted development. No code was written manually. The author prompted a code agent to build the DApp on Preprod, observed what broke, refined the prompts, and wrote the tutorial while the context was still fresh. This is "vibe-coding" in the literal sense: directing AI to experiment with the Midnight SDKs and wallets, then documenting the path through it.
-
 ## Who wrote what
 
 | Artifact | Primary Author | AI Role | Verification |
