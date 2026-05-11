@@ -507,7 +507,7 @@ The user verifies and generates a proof in [`Prove.tsx`](https://github.com/0xfd
       }
 ```
 
-**Important:** Because the commitment is generated with a domain separator eg: `age`, `residency`. You can decide to have your UI compute a commitment based on the type of proof selected. However if you gave the attestation authority a commitment generated using `residency` domain separator and you try to prove `age` then proof generation will fail if there no attestation for `age` exists.
+**Important:** Because the commitment is generated with a domain separator eg: `age`, `residency`. You can decide to have your UI compute a commitment based on the type of proof selected. However if you gave the attestation authority a commitment generated using `residency` domain separator and you try to prove `age` then proof generation will fail if no attestation for `age` exists.
 
 
 
