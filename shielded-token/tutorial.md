@@ -60,6 +60,24 @@ witness localNonce(): Bytes<32>;
 
 For every mint, a fresh random 32-byte nonce is generated. It lives in the TypeScript layer and is bound into the zero-knowledge proof generation.
 
+### TypeScript witness binding
+
+`localNonce` witness is integrated in `contract.ts` and is attached to the compiled smart contract before deployment or circuit calling:
+
+```typescript
+const witnesses = {
+  localNonce: ({ privateState }: any): [any, Uint8Array] => {
+    const nonce = crypto.getRandomValues(new Uint8Array(32));
+    return [privateState, nonce];
+  },
+};
+
+const withWitnesses = (CompiledContract as any).withWitnesses(witnesses);
+const compiledContract = withWitnesses(withAssets(cc));
+```
+
+The witness receives the current private and must return `[nextPrivateState, witnessValue]`. The private state is passed through and a cryptographically secure nonce is generated.
+
 ### Minting a shielded token
 
 The first circuit is `createShieldedToken`. It mints a new shielded token with a unique nonce and sends it to a recipient:
