@@ -44,6 +44,7 @@ A stablecoin DApp with unshielded token operations. Demonstrates native minting,
 - Send tokens from vault to user address
 - Deposit tokens into vault
 - Wallet-to-wallet transfers
+- Webhook subscription system that triggers `fetchState` for live balance updates
 - Dashboard with total supply, contract balance, and wallet balance
 
 **Tech stack:** React + TypeScript + Vite + Midnight SDK
