@@ -7,7 +7,7 @@ A complete shielded token DApp on the Midnight Network. Users can mint, transfer
 - **Mint Shielded Tokens**: Create new shielded tokens with `mintShieldedToken` and unique nonces via `evolveNonce`
 - **Atomic Mint & Send**: Mint tokens and forward them in a single transaction using `sendImmediateShielded`
 - **Private Transfers**: Send shielded tokens through the wallet's native transfer path — no manual coin selection required
-- **Burn Shielded Tokens**: Destroy committed tokens via `sendShielded` to `shieldedBurnAddress()` with automatic change return
+- **Burn Shielded Tokens**: Destroy tokens via `depositAndBurn` (`receiveShielded` + `sendImmediateShielded`) — no Merkle path required
 - **Coin Inventory**: Minted coins are saved locally for easy burning without manual hex input
 - **Wallet Integration**: Connect via Lace or 1AM through the DApp Connector API v4
 - **Balance Display**: View shielded balances with 15-second auto-sync
@@ -76,9 +76,8 @@ The shielded token contract (`contracts/Token.compact`) manages:
 
 - **Public ledger state**: `totalSupply`, `totalBurned`
 - **Minting**: `createShieldedToken` mints shielded coins with unique nonces
-- **Atomic mint & send**: `mintAndSend` mints to the contract then immediately forwards to a recipient
-- **Transfer**: `transferShielded` spends existing shielded coins via `sendShielded`
-- **Burn**: `burnShieldedToken` sends committed coins to the burn address via `sendShielded`
+- **Atomic mint & send**: `mintAndSend` mints to the contract then immediately forwards to a recipient via `sendImmediateShielded`
+- **Burn**: `depositAndBurn` receives a coin and burns it in the same transaction via `sendImmediateShielded`
 - **Nonce evolution**: `evolveNonce` derives deterministic nonces from counters
 
 ### Key Circuits
@@ -87,14 +86,13 @@ The shielded token contract (`contracts/Token.compact`) manages:
 |---------|---------|
 | `createShieldedToken` | Mint a new shielded coin to a recipient |
 | `mintAndSend` | Atomically mint and forward a coin in one transaction |
-| `transferShielded` | Spend an existing shielded coin (requires Merkle qualification) |
-| `burnShieldedToken` | Burn a shielded coin (uses `sendShielded`, requires Merkle index) |
+| `transferShielded` | Spend an existing shielded coin (requires Merkle qualification) — present in contract but unused in UI |
+| `depositAndBurn` | Receive a coin and burn it atomically via `sendImmediateShielded` |
 | `nextNonce` | Derive the next nonce from an index and current nonce |
-| `acceptShielded` | Receive a shielded coin into the contract |
 
 ### Merkle Tree Constraint
 
-Freshly minted shielded coins are not immediately spendable in an independent transaction. They must first be committed to the on-chain Merkle tree. This is why `transferShielded` requires `QualifiedShieldedCoinInfo` (with `mt_index`), while `mintAndSend` and `burnShieldedToken` use `sendImmediateShielded` which bypasses the Merkle qualification.
+Freshly minted shielded coins are not immediately spendable in an independent transaction via `sendShielded` — they must first be committed to the on-chain Merkle tree and obtain an `mt_index`. The UI avoids this entirely by using `mintAndSend` (atomic mint + forward via `sendImmediateShielded`) for sends and `depositAndBurn` (atomic receive + burn via `sendImmediateShielded`) for burns. The `transferShielded` circuit exists in the contract but is not used in the UI.
 
 ### Proving Strategy
 
@@ -129,12 +127,6 @@ src/
 
 ## Troubleshooting
 
-See [`troubleshoot.md`](./troubleshoot.md) for detailed guidance on:
-- Proof server 400/500 errors
-- Missing built-in ledger circuit artifacts
-- Vite SPA fallback issues
-- Contract compilation problems
-
 Common quick fixes:
 
 | Error | Cause | Fix |
@@ -149,7 +141,7 @@ Common quick fixes:
 - **Private state is stored locally** via IndexedDB through the level private state provider
 - **Shielded balances are private** — the UI shows your balance only because the wallet decrypts it locally; on-chain observers see only commitments
 - **Nonce management is automatic** — the `localNonce` witness generates fresh random nonces for each mint
-- **Change outputs are automatic** — when burning tokens, any remainder is returned as a new shielded coin via `ShieldedSendResult.change`
+- **Burn change is contract-owned** — `depositAndBurn` sends any remainder to `kernel.self()` (the smart contract). The UI defaults to full burn to avoid this
 - **Coin storage is local-only** — clearing browser storage removes your saved coin inventory, but your actual tokens remain in the wallet
 
 ---

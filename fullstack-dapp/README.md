@@ -5,7 +5,6 @@ A Midnight Network credential attestation DApp with privacy-preserving ZK proofs
 ## Features
 
 - **Authority Attestations**: Authority attests users for age, residency, or certification credentials
-- **Selective Disclosure**: Users prove eligibility without revealing which credential
 - **Off-chain Analytics**: Tracks proof counts via Midnight indexer
 
 ## Tech Stack
