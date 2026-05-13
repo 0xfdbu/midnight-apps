@@ -297,6 +297,8 @@ The DApp Connector v4 API does not expose a native push/subscription API. Reacti
 
 View the full [`useWalletSubscription.ts`](https://github.com/0xfdbu/midnight-apps/blob/main/dapp-connect/src/hooks/useWalletSubscription.ts) file on GitHub.
 
+`useWalletSubscription` hook calls `loadWalletState()` every 15 seconds
+
 ```typescript
 // src/hooks/useWalletSubscription.ts
 export function useWalletSubscription(options = {}) {
