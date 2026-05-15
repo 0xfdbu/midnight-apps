@@ -1,4 +1,4 @@
-# Attestation Credentials DApp
+# Credence
 
 A Midnight Network credential attestation DApp with privacy-preserving ZK proofs.
 
