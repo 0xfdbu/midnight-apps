@@ -76,20 +76,6 @@ A privacy-preserving token DApp using Zswap shielded primitives. All balances an
 
 ---
 
-## Shared patterns
-
-All four apps reuse these patterns:
-
-| Pattern | Implementation |
-|---------|---------------|
-| Wallet detection | `window.midnight` enumeration with version filtering |
-| Provider builder | `privateStateProvider` + `publicDataProvider` + `zkConfigProvider` + `proofProvider` + `walletProvider` + `midnightProvider` |
-| State polling | 15-second interval via `loadWalletState()` |
-| Network | `preprod` |
-| Frontend | React 19 + Vite + TypeScript + Tailwind CSS v4 |
-
----
-
 ## Tutorials
 
 Each app folder contains a `tutorial.md` that walks through the smart contract, witness binding, provider setup, frontend integration, and deployment:
