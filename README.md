@@ -97,6 +97,7 @@ Each app folder contains a `tutorial.md` that walks through the smart contract, 
 - [`dapp-connect/tutorial.md`](./dapp-connect/tutorial.md) — Wallet connection, browser vs CLI transactions
 - [`fullstack-dapp/tutorial.md`](./fullstack-dapp/tutorial.md) — ZK attestation, Merkle trees, nullifiers
 - [`unshielded-token/tutorial.md`](./unshielded-token/tutorial.md) — Unshielded token vault, native mint/send
+- [`unshielded-token/states_tutorial.md`](./unshielded-token/states_tutorial.md) — Querying on-chain state, WebSocket subscriptions, and real-time UI updates
 - [`shielded-token/tutorial.md`](./shielded-token/tutorial.md) — Shielded tokens, atomic patterns, Merkle constraints
 
 See [`Methodology.md`](./Methodology.md) for authorship, AI tooling, and scope details.
