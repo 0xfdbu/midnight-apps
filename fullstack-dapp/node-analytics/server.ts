@@ -9,8 +9,8 @@ const app = express();
 const PORT = 3001;
 const INDEXER_HTTP = 'https://indexer.preprod.midnight.network/api/v4/graphql';
 const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
-const DATABASE_URL = 'postgresql://neondb_owner:npg_PkV4bSulxJs5@ep-holy-feather-an0zodck-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
-const TRACKED_CONTRACT = '331460e632fad9146d23b2176433413e8405976afef8a6f0999dda10433f599d';
+const DATABASE_URL = ''; // Replace by your postgress db url
+const TRACKED_CONTRACT = ''; // replace by your deployed contract
 
 app.use(cors());
 app.use(express.json());
