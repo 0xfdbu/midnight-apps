@@ -548,7 +548,7 @@ When you unlock the Home page, it checks whether you are an authority or not. It
         const onChainAuthority = ledger.authority;
 ```
 
-The frontend derives your authority secret key from the same master key that unlocked your identity. It then hashes that key through the smart contract's `publicKey()` circuit to produce your authority public key. If the on-chain authority matches your computed public key byte-for-byte, a green badge appears saying "You are the authority". If there is a mismatch, a grey badge shows "Not the authority".
+The frontend derives your authority secret key from the same master key that unlocked your identity. It then hashes that key through the smart contract's `publicKey()` circuit to produce your authority public key. If the on-chain authority matches your computed public key byte-for-byte, a green badge appears saying "You are the authority". If there is a mismatch, a gray badge shows "Not the authority".
 
 ```typescript
         const match = onChainAuthority.length === authorityPublicKey.length &&

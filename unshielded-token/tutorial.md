@@ -339,7 +339,7 @@ The frontend has `handleReceive`. It functions similarly to `handleSend`: `store
 
 ---
 
-## 2. Statistics
+## 2. Displaying Statistics
 
 The vault smart contract has a state called `balance`, which returns a set of token balances. The approach here is to iterate through the balances array to find how many tokens match the token ID. For a token ID to appear, you need to execute a mint operation.
 

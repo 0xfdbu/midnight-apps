@@ -21,7 +21,7 @@ This document explains how these tutorials and repositories were built, who wrot
 | Code snippets | AI (human-directed) | Specifically ordered only to use code snippets from existing working code / Sometimes code is minimized and simplified to go with the demo| — |
 | Troubleshooting | Mixed | AI drafted entries from manually recorded debug logs | Often corrected, supplemented, and verified on-chain |
 | Screenshots, console logs | Human | — | Captured live from a local development environment during on-chain testing |
-| README(s) | AI (human-directed) | Generated from project structure and feature lists | Author reviewed and prompted AI to correct/verify against tutorial content |
+| README(s) | AI (human-directed) | Generated from project structure and feature lists / sometimes from tutorial | — |
 | Grammar and Midnight style format | AI | Applied `Style.md` rules (active voice, sentence case, Oxford comma, etc.) | Author reviewed; over-edits that changed the author's voice were reverted |
 | Section titles and headings | Mixed | AI generated initial titles for all passages | Most kept as-is; some corrected or edited for clarity |
 | Cross-references and file links | AI | Generated inline links to source files (e.g., "view the full code in...") | —
@@ -29,6 +29,10 @@ This document explains how these tutorials and repositories were built, who wrot
 ## AI tooling
 
 The AI assistant utilized a specialized Midnight MCP server (`midnight-mcp`) for querying official documentation, verifying Compact syntax, analyzing contract structures, and looking up TypeScript SDK patterns. The AI assistant embedded in the live documentation at `https://docs.midnight.network/` was also consulted extensively during development. This tooling was used to validate technical claims during both code development and tutorial writing.
+
+## Word counts
+
+Tutorial word counts are measured with `wc -w` (Unix word count) run against the `.md` file. This counts whitespace-delimited tokens including code blocks, headings, and inline markup.
 
 ## Work in progress
 
