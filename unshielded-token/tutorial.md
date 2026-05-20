@@ -43,7 +43,7 @@ Now that you have a frontend that's ready to connect, the next step is to build 
 
 **`mintToContract`: minting a stablecoin into the vault**
 
-Use a padded string for the domain to define the token standard — in this case, `"stablecoin:usd"`
+Use a padded string for the domain to define the token standard — in this case, `"stablecoin:usd"` then `mintUnshieldedToken` is called with the values.
 
 ```typescript
 export circuit mintToContract(amount: Uint<64>): Bytes<32> {
@@ -62,7 +62,7 @@ export circuit mintToContract(amount: Uint<64>): Bytes<32> {
 
 **`sendToUser`: transferring from vault to user**
 
-To move tokens, `sendToUser` requires you to reconstruct the `color` using the same domain and the smart contract's address (`kernel.self()`)
+To move tokens, `sendToUser` requires you to reconstruct the `color` using the same domain and the smart contract's address (`kernel.self()`) then `color` is passed to `sendUnshielded()` to send the unshielded token.
 
 ```typescript
 export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
