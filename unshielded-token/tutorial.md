@@ -41,7 +41,7 @@ npm run dev
 
 Now that you have a frontend that's ready to connect, the next step is to build the compact smart contract. Here are three core circuits that handle the native mint for unshielded token vault lifecycle:
 
-### `mintToContract`: minting a stablecoin into the vault
+**`mintToContract`: minting a stablecoin into the vault**
 
 Use a padded string for the domain to define the token standard — in this case, `"stablecoin:usd"`
 
@@ -60,7 +60,7 @@ export circuit mintToContract(amount: Uint<64>): Bytes<32> {
 
 > **Note:** You have to cast `amount` to `Uint<64>` when updating `totalSupply`
 
-### `sendToUser`: transferring from vault to user
+**`sendToUser`: transferring from vault to user**
 
 To move tokens, `sendToUser` requires you to reconstruct the `color` using the same domain and the smart contract's address (`kernel.self()`)
 
@@ -76,7 +76,7 @@ export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
 }
 ```
 
-### `receiveTokens`: depositing into vault
+**`receiveTokens`: depositing into vault**
 
 For the `receiveTokens` circuit, you need to be careful with bit sizes. Unlike the mint function, `receiveUnshielded` strictly requires a `Uint<128>` for the amount
 
@@ -138,7 +138,7 @@ Now that your smart contract is deployed on the Preprod network, the next step i
 
 ---
 
-## Smart contract operations
+## 1. Smart contract operations
 
 Set up the smart contract providers
 
@@ -173,7 +173,7 @@ export async function mintToContract(
 }
 ```
 
-### 1. Load dependencies
+**1. Load dependencies**
 
 Define `mods` by awaiting `getModules()`, which imports the compiled contract dependencies. These are cached on the first call.
 
@@ -182,7 +182,7 @@ const mods = await getModules();
 const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, proofModule } = mods;
 ```
 
-### 2. Build providers
+**2. Build providers**
 
 ```typescript
 const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
@@ -220,7 +220,7 @@ const providers: any = {
 };
 ```
 
-### 3. Connect to the smart contract
+**3. Connect to the smart contract**
 
 Import the smart contract module and attach it to the live instance on Preprod. `callTx` maps directly to your Compact circuits.
 
@@ -243,7 +243,7 @@ const contract: any = await findDeployedContract(providers, {
 });
 ```
 
-### 4. Execute the mint
+**4. Execute the mint**
 
 Generate the zero-knowledge proof, then submit the transaction and await the hash
 
@@ -339,7 +339,7 @@ The frontend has `handleReceive`. It functions similarly to `handleSend`: `store
 
 ---
 
-## Displaying statistics
+## 2. Displaying Statistics
 
 The vault smart contract has a state called `balance`, which returns a set of token balances. The approach here is to iterate through the balances array to find how many tokens match the token ID. For a token ID to appear, you need to execute a mint operation.
 
@@ -400,7 +400,7 @@ export async function getContractState(): Promise<ContractState> {
 }
 ```
 
-### 1. Query the indexer
+**1. Query the indexer**
 
 Fetch the raw smart contract state from the Preprod indexer.
 
@@ -417,7 +417,7 @@ if (!contractState) {
 }
 ```
 
-### 2. Deserialize into typed ledger state
+**2. Deserialize into typed ledger state**
 
 The indexer returns raw bytes. Import the smart contract module and pass the raw data through `ledger()` to get typed fields like `totalSupply` and `totalBurned`.
 
@@ -426,7 +426,7 @@ const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
 const ledgerState = contractModule.ledger(contractState.data);
 ```
 
-### 3. Return the values
+**3. Return the values**
 
 ```typescript
 return {
@@ -435,7 +435,7 @@ return {
 };
 ```
 
-## Wallet operations
+## 3. Wallet operations
 
 For displaying user receiving addresses and stablecoin balances, see section 2.
 
