@@ -41,7 +41,7 @@ npm run dev
 
 Now that you have a frontend that's ready to connect, the next step is to build the compact smart contract. Here are three core circuits that handle the native mint for unshielded token vault lifecycle:
 
-**Natively minting a stablecoin into the vault with `mintUnshieldedToken`**
+**`mintToContract`: minting a stablecoin into the vault**
 
 Use a padded string for the domain to define the token standard — in this case, `"stablecoin:usd"`
 
@@ -60,7 +60,7 @@ export circuit mintToContract(amount: Uint<64>): Bytes<32> {
 
 > **Note:** You have to cast `amount` to `Uint<64>` when updating `totalSupply`
 
-**Transferring with `sendUnshielded` from vault**
+**`sendToUser`: transferring from vault to user**
 
 To move tokens, `sendToUser` requires you to reconstruct the `color` using the same domain and the smart contract's address (`kernel.self()`)
 
@@ -76,7 +76,7 @@ export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
 }
 ```
 
-**Depositing into vault with `receiveUnshielded`**
+**`receiveTokens`: depositing into vault**
 
 For the `receiveTokens` circuit, you need to be careful with bit sizes. Unlike the mint function, `receiveUnshielded` strictly requires a `Uint<128>` for the amount
 
