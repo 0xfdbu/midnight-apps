@@ -94,7 +94,7 @@ See [`Methodology.md`](./Methodology.md) for authorship, AI tooling, and scope d
 
 ```bash
 git clone https://github.com/0xfdbu/midnight-apps.git
-cd midnight-apps/<app-folder>
+cd midnight-apps/dapp-connect       # or: fullstack-dapp, unshielded-token, shielded-token
 npm install
 npm run dev
 ```

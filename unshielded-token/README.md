@@ -6,7 +6,7 @@ A Midnight Network stablecoin DApp with unshielded token operations.
 
 - **Address**: `0c0ad6d96daa1b983751db2149a093c34ea73714c33fbad40d291d9e887f8084`
 - **Token Type**: `1193...9458`
-- **Circuits**: `mintToContract`, `makeTransfer`, `receive`, `contractSend`
+- **Circuits**: `mintToContract`, `mintToUser`, `sendToUser`, `receiveTokens`, `burnStablecoin`
 
 ## Tech Stack
 
