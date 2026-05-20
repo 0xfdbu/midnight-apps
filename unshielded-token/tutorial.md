@@ -78,7 +78,7 @@ export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
 
 **`receiveTokens`: depositing into vault**
 
-For the `receiveTokens` circuit, you need to be careful with bit sizes. Unlike the mint function, `receiveUnshielded` strictly requires a `Uint<128>` for the amount
+For the `receiveTokens` circuit, Bit sizes are important here. Unlike the mint function, `receiveUnshielded` strictly requires a `Uint<128>` for the amount
 
 ```typescript
 export circuit receiveTokens(amount: Uint<128>): [] {
@@ -109,7 +109,7 @@ Then compile
 compact compile contracts/Contract.compact contracts/managed/stablecoin
 ```
 
-> **Note:** Skip this step if you want to clone the [repo](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable by the frontend. A smart contract is already deployed on Preprod: `0c0ad6d96daa1b983751db2149a093c34ea73714c33fbad40d291d9e887f8084`
+> **Note:** Skip this step if you want to clone the [unshielded-token repository](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable by the frontend. A smart contract is already deployed on Preprod: `0c0ad6d96daa1b983751db2149a093c34ea73714c33fbad40d291d9e887f8084`
 
 If you do decide to recompile and redeploy, run:
 
@@ -120,7 +120,7 @@ MNEMONIC="24 secret seed phrase from Lace or 1AM" npx tsx scripts/go.ts
 A simple approach to quickly deploy and save time of wallet syncing by using your existing wallet extension state, View [Deploy.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/pages/Deploy.tsx) (Highly recommended)
 
 
-![Image description](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/u84bdf1t71eghhip6i6o.png)
+![Deploy page showing contract deployment with connected wallet](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/u84bdf1t71eghhip6i6o.png)
 
 **Disclaimer:** This demonstration uses a smart contract where anybody can mint so do not use for production without proper authentication.
 
@@ -175,7 +175,7 @@ export async function mintToContract(
 
 **1. Load dependencies**
 
-Define `mods` by awaiting `getModules()`, which imports the compiled contract dependencies. These are cached on the first call.
+Define `mods` by awaiting `getModules()`, which imports the compiled smart contract dependencies. These are cached on the first call.
 
 ```typescript
 const mods = await getModules();
@@ -256,7 +256,7 @@ onSuccess(txData.public.txId);
 
 ![Mint transaction success](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/3vow9usvg56pah0kzbw7.png)
 
-Now that tokens are minted into the vault, the next step is to send them from the vault to an address.
+Now that you have minted tokens into the vault, the next step is to send them from the vault to an address.
 
 First, handle how user addresses are encoded. The helper function parses a `Bech32m` string, decodes it to an unshielded address, and returns raw bytes because the `sendToUser` circuit expects a `Bytes<32>` field.
 
@@ -339,7 +339,7 @@ The frontend has `handleReceive`. It functions similarly to `handleSend`: `store
 
 ---
 
-## 2. Displaying Statistics
+## 2. Displaying statistics
 
 The vault smart contract has a state called `balance`, which returns a set of token balances. The approach here is to iterate through the balances array to find how many tokens match the token ID. For a token ID to appear, you need to execute a mint operation.
 

@@ -23,7 +23,7 @@ This document explains how these tutorials and repositories were built, who wrot
 | Screenshots, console logs | Human | — | Captured live from a local development environment during on-chain testing |
 | README(s) | AI (human-directed) | Generated from project structure and feature lists / sometimes from tutorial | — |
 | Grammar and Midnight style format | AI | Applied `Style.md` rules (active voice, sentence case, Oxford comma, etc.) | Author reviewed; over-edits that changed the author's voice were reverted |
-| Section titles and headings | Mixed | AI generated initial titles for all passages | Most kept as-is; some corrected or edited for clarity |
+| Section titles and headings | Mixed | AI generated initial titles for all passages, Formatted titles markdown + numbers | Most kept as-is; some corrected or edited for clarity |
 | Cross-references and file links | AI | Generated inline links to source files (e.g., "view the full code in...") | —
 
 ## AI tooling
