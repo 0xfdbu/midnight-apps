@@ -34,6 +34,13 @@ The AI assistant utilized a specialized Midnight MCP server (`midnight-mcp`) for
 
 Tutorial word counts are measured with `wc -w` (Unix word count) run against the `.md` file. This counts whitespace-delimited tokens including code blocks, headings, and inline markup.
 
+**Example:**
+
+```bash
+$ wc -w unshielded-token/tutorial.md
+2413 unshielded-token/tutorial.md
+```
+
 ## Work in progress
 
 These tutorials and the accompanying code are actively being refactored and optimized. This is not the final version. The code will change in the future for better modularity, and the guides will be updated as the codebase evolves.
