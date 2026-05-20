@@ -220,9 +220,9 @@ const providers: any = {
 };
 ```
 
-**3. Connect to the contract**
+**3. Connect to the smart contract**
 
-Import the contract module and attach it to the live instance on Preprod. `callTx` maps directly to your Compact circuits.
+Import the smart contract module and attach it to the live instance on Preprod. `callTx` maps directly to your Compact circuits.
 
 ```typescript
 const [{ findDeployedContract }] = await Promise.all([
@@ -402,7 +402,7 @@ export async function getContractState(): Promise<ContractState> {
 
 **1. Query the indexer**
 
-Fetch the raw contract state from the Preprod indexer.
+Fetch the raw smart contract state from the Preprod indexer.
 
 ```typescript
 const mods = await getModules();
@@ -419,7 +419,7 @@ if (!contractState) {
 
 **2. Deserialize into typed ledger state**
 
-The indexer returns raw bytes. Import the contract module and pass the raw data through `ledger()` to get typed fields like `totalSupply` and `totalBurned`.
+The indexer returns raw bytes. Import the smart contract module and pass the raw data through `ledger()` to get typed fields like `totalSupply` and `totalBurned`.
 
 ```typescript
 const contractModule = await import(CONTRACT_PATH + '/contract/index.js');
