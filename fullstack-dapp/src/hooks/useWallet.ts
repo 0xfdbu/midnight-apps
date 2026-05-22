@@ -158,7 +158,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
             unshielded: {},
             dust: dustBalance,
           },
-          showAccountModal: true,
         });
       }
     } catch (err) {
