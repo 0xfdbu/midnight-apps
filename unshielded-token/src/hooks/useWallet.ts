@@ -116,7 +116,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         }
       }
       setConnectedApi(connectedApi);
-      setShowAccountModal(true);
       await get().loadWalletState();
     } catch (err) {
       setError(handleWalletError(err));
