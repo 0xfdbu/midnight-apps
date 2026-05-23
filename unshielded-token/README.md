@@ -5,7 +5,6 @@ A Midnight Network stablecoin DApp with unshielded token operations.
 ## Contract
 
 - **Address**: `0c0ad6d96daa1b983751db2149a093c34ea73714c33fbad40d291d9e887f8084`
-- **Token Type**: `1193...9458`
 - **Circuits**: `mintToContract`, `mintToUser`, `sendToUser`, `receiveTokens`, `burnStablecoin`
 
 ## Tech Stack
@@ -20,12 +19,14 @@ A Midnight Network stablecoin DApp with unshielded token operations.
 | Route | Description |
 |-------|-------------|
 | `/` | Dashboard: Total Supply, Contract Balance, Wallet Balance, Contract Selector |
+| `/deploy` | Deploy a new stablecoin vault contract |
 | `/mint` | Mint tokens to contract |
 | `/send` | Wallet-to-wallet transfer |
 | `/receive` | Deposit tokens to contract |
 | `/contract-send` | Contract sends tokens to wallet |
 | `/burn` | Burn tokens from wallet |
 | `/wallet-info` | View addresses and balances |
+| `/zswap-state` | Query combined ZSwap and contract state |
 
 ## Commands
 
@@ -49,7 +50,7 @@ Direct wallet-to-wallet transfers (the **Send** page) bypass the contract entire
 
 ## Notes
 
-- DUST values displayed with 6 decimal places (divide by 1,000,000)
+- DUST balances are normalized for display
 - Uses `balanceUnsealedTransaction` for transaction balancing
 - Uses `queryContractState` to read contract balance
 - Active contract address is persisted in localStorage and can be changed from the dashboard
