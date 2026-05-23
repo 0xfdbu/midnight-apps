@@ -129,7 +129,9 @@ A simple approach to quickly deploy and save time of wallet syncing by using you
 
 Now that your smart contract is deployed on the Preprod network, the next step is to integrate it with the frontend. Features to cover are shown below in the screenshot:
 
-![Token operations dashboard](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/nqhspr1koigqg4d8pngq.png)
+![Token operations dashboard](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/y8h4or529f14okhwd5v1.png)
+
+
 
 ---
 
