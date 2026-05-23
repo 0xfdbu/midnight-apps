@@ -19,11 +19,12 @@ A Midnight Network stablecoin DApp with unshielded token operations.
 
 | Route | Description |
 |-------|-------------|
-| `/` | Dashboard: Total Supply, Contract Balance, Wallet Balance |
+| `/` | Dashboard: Total Supply, Contract Balance, Wallet Balance, Contract Selector |
 | `/mint` | Mint tokens to contract |
 | `/send` | Wallet-to-wallet transfer |
 | `/receive` | Deposit tokens to contract |
 | `/contract-send` | Contract sends tokens to wallet |
+| `/burn` | Burn tokens from wallet |
 | `/wallet-info` | View addresses and balances |
 
 ## Commands
@@ -42,7 +43,7 @@ The unshielded token DApp follows a vault pattern. The smart contract holds toke
 2. **Mint to contract** — Generate new tokens and send them directly to the contract balance. This increases total supply and funds the vault.
 3. **Contract Send** — Distribute tokens from the contract to any wallet address. The recipient sees the tokens in their wallet balance.
 4. **Receive (deposit)** — Send tokens from your wallet back into the contract, making them available for the contract to manage.
-5. **Burn** — Destroy tokens from the contract, permanently reducing total supply.
+5. **Burn** — Move tokens from your wallet into the contract as burned, permanently reducing total supply.
 
 Direct wallet-to-wallet transfers (the **Send** page) bypass the contract entirely and use the wallet's native transfer API.
 
@@ -52,3 +53,5 @@ Direct wallet-to-wallet transfers (the **Send** page) bypass the contract entire
 - Uses `balanceUnsealedTransaction` for transaction balancing
 - Uses `queryContractState` to read contract balance
 - Active contract address is persisted in localStorage and can be changed from the dashboard
+- **Token auto-selection**: When a contract is configured, the dashboard reads its on-chain balance and automatically selects the token for all operations. No manual token picker needed.
+- Selected token ID is persisted in `localStorage` as `unshielded_selected_token`
