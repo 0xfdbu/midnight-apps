@@ -243,7 +243,7 @@ console.log('[ContractState] Ledger totalBurned:', ledgerState.totalBurned.toStr
 
 ---
 
-## 5. Displaying contract state in a UI
+## 5. Displaying smart contract state in a UI
 
 Now that you have all the data you need, all that remains is to render it in the frontend as `totalSupply`, `totalBurned`, `contractBalance`, and `walletBalance`.
 
@@ -343,7 +343,7 @@ const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
       };
 ```
 
-The WebSocket is used as a notification system. Whenever a message is received, `fetchState()` is called, which in turn queries `getContractState(contractAddress)`, `getContractBalance(contractAddress, selectedTokenId)`, and `getUserTokenBalance(connectedApi, selectedTokenId)`.
+The WebSocket acts as a notification system. Whenever the indexer emits a message, call `fetchState()`, which in turn queries `getContractState(contractAddress)`, `getContractBalance(contractAddress, selectedTokenId)`, and `getUserTokenBalance(connectedApi, selectedTokenId)`.
 
 ```typescript
   const fetchState = useCallback(async () => {

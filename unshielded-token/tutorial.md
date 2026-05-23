@@ -42,7 +42,7 @@ Now that you have a frontend that's ready to connect, the next step is to build 
 
 **`mintToContract`: minting a stablecoin into the vault**
 
-Use a padded string for the domain to define the token standard — in this case, `"stablecoin:usd"` then `mintUnshieldedToken` is called with the values.
+Use a padded string for the domain to define the token standard — in this case, `"stablecoin:usd"`, then call `mintUnshieldedToken` with the values.
 
 ```typescript
 export circuit mintToContract(amount: Uint<64>): Bytes<32> {
@@ -61,7 +61,7 @@ export circuit mintToContract(amount: Uint<64>): Bytes<32> {
 
 **`sendToUser`: transferring from vault to user**
 
-To move tokens, `sendToUser` requires you to reconstruct the `color` using the same domain and the smart contract's address (`kernel.self()`) then `color` is passed to `sendUnshielded()` to send the unshielded token.
+To move tokens, `sendToUser` requires you to reconstruct the `color` using the same domain and the smart contract's address (`kernel.self()`), then pass `color` to `sendUnshielded()` to send the unshielded token.
 
 ```typescript
 export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
@@ -77,7 +77,7 @@ export circuit sendToUser(amount: Uint<64>, userAddr: UserAddress): [] {
 
 **`receiveTokens`: depositing into vault**
 
-For the `receiveTokens` circuit, Bit sizes are important here. Unlike the mint function, `receiveUnshielded` strictly requires a `Uint<128>` for the amount
+For the `receiveTokens` circuit, bit sizes matter here. Unlike the mint function, `receiveUnshielded` strictly requires a `Uint<128>` for the amount
 
 ```typescript
 export circuit receiveTokens(amount: Uint<128>): [] {
@@ -116,7 +116,7 @@ If you do decide to recompile and redeploy, run:
 MNEMONIC="24 secret seed phrase from Lace or 1AM" npx tsx scripts/go.ts
 ```
 
-A simple approach to quickly deploy and save time of wallet syncing by using your existing wallet extension state, View [Deploy.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/pages/Deploy.tsx) (Highly recommended)
+A simple approach to quickly deploy without waiting for wallet sync: use your existing wallet extension state via [Deploy.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/pages/Deploy.tsx) (highly recommended)
 
 
 ![Deploy page showing contract deployment with connected wallet](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/u84bdf1t71eghhip6i6o.png)
@@ -142,7 +142,7 @@ Set up the smart contract providers
 - `privateStateProvider`: uses `levelPrivateStateProvider` for persistent localStorage
 - `publicDataProvider`: reads on-chain state from the indexer
 - `zkConfigProvider`: loads `FetchZkConfigProvider` — compiled verifiers...
-- `proofProvider`: generates zero-knowledge proofs via **connected wallet's DApp connect proof provider**
+- `proofProvider`: generates zero-knowledge proofs via **connected wallet's DApp connector proof provider**
 - `walletProvider`: handles `balanceTx` via `connectedApi.balanceUnsealedTransaction`
 - `midnightProvider`: submits transactions via `connectedApi.submitTransaction`
 
@@ -255,7 +255,7 @@ onSuccess(txData.public.txId);
 
 Now that you have minted tokens into the vault, the next step is to send them from the vault to an address.
 
-First, handle how user addresses are encoded. The helper function parses a `Bech32m` string, decodes it to an unshielded address, and returns raw bytes because the `sendToUser` circuit expects a `Bytes<32>` field.
+First, encode the user address. The helper function parses a `Bech32m` string, decodes it to an unshielded address, and returns raw bytes because the `sendToUser` circuit expects a `Bytes<32>` field.
 
 ```typescript
 export async function encodeUserAddress(bech32Address: string): Promise<Uint8Array> {
@@ -338,7 +338,7 @@ The frontend has `handleReceive`. It functions similarly to `handleSend`: `store
 
 ## 2. Displaying statistics
 
-The vault's smart contract `balance` state tracks token balances. After minting, the contract is queried via `getContractFirstTokenBalance` to identify the first token held by the contract, which is then stored as `selectedTokenId` in the Zustand store.
+The vault's smart contract `balance` state tracks token balances. After minting, query the contract via `getContractFirstTokenBalance` to identify the first token it holds. The dashboard then stores this as `selectedTokenId` in the Zustand store.
 
 ```typescript
 export async function getContractBalance(contractAddress: string, tokenId: string): Promise<bigint> {
@@ -386,7 +386,7 @@ export async function getContractFirstTokenBalance(contractAddress: string) {
 ```
 
 
-Now get the user's token balance. First call `connectedApi.getUnshieldedBalances()` to get all user wallet balances, then filter the results with `balances[tokenId]`.
+Now get your token balance. First call `connectedApi.getUnshieldedBalances()` to get all wallet balances, then filter the results with `balances[tokenId]`.
 
 ```typescript
 export async function getUserTokenBalance(connectedApi: ConnectedAPI, tokenId: string): Promise<bigint> {
@@ -605,7 +605,7 @@ Now that you have finished this tutorial, here are a few things you can do next:
 
 - Check the full repository [source code on GitHub](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token)
 - Read the Midnight Compact language docs
-- Add authentication / whitelist for mint
+- Add authentication / allowlist for mint
 
 ## Troubleshooting
 
