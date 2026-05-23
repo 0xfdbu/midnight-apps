@@ -271,10 +271,10 @@ export function HomePage() {
             </div>
             <div className="space-y-2">
               <p className="text-[13px] text-text-secondary leading-relaxed">
-                <strong className="text-white">How it works:</strong> This DApp manages an unshielded stablecoin vault. The contract holds tokens on-chain and can mint, burn, or send them.
+                <strong className="text-white">How it works:</strong> This DApp manages an unshielded token vault. The contract can mint new tokens, send from its balance to users, and accept deposits. The dashboard automatically detects the token held by your configured contract and selects it for all operations.
               </p>
               <p className="text-[13px] text-text-secondary leading-relaxed">
-                <strong className="text-white">Typical flow:</strong> Deploy a contract → Mint tokens to the contract → Use Contract Send to distribute tokens to user wallets → Tokens appear in the recipient&apos;s wallet balance.
+                <strong className="text-white">Typical flow:</strong> Deploy a contract (or paste an existing address) → The dashboard auto-detects the contract&apos;s token → Mint tokens into the vault → Use Contract Send to distribute to user wallets → Or deposit tokens back into the vault with Receive Tokens.
               </p>
             </div>
           </div>

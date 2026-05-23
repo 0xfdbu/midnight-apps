@@ -154,7 +154,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   loadWalletState: async () => {
-    const { connectedApi, setIsLoadingState, setError, setAddresses, setBalances, setConfig, setSelectedTokenId } = get();
+    const { connectedApi, setIsLoadingState, setError, setAddresses, setBalances, setConfig } = get();
     if (!connectedApi) return;
 
     setIsLoadingState(true);
@@ -176,11 +176,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
           setConfig(config as WalletConfiguration);
           const tokens = Object.keys(balances.unshielded).filter((id) => id !== NATIVE_TOKEN_ID);
           set({ availableTokens: tokens });
-          // Auto-select the only available token if none is currently selected
-          const current = get().selectedTokenId;
-          if (!current && tokens.length === 1) {
-            setSelectedTokenId(tokens[0]);
-          }
         },
         (err) => {
           if (isWalletError(err as any) && (err as any).code === 'Disconnected') {

@@ -14,7 +14,6 @@
   - `@midnight-ntwrk/midnight-js-contracts`
   - `@midnight-ntwrk/midnight-js-dapp-connector-proof-provider`
   - `@midnight-ntwrk/midnight-js-fetch-zk-config-provider`
-  - `@midnight-ntwrk/midnight-js-http-client-proof-provider`
   - `@midnight-ntwrk/midnight-js-indexer-public-data-provider`
   - `@midnight-ntwrk/midnight-js-level-private-state-provider`
   - `@midnight-ntwrk/midnight-js-network-id`
@@ -109,7 +108,7 @@ Then compile
 compact compile contracts/Contract.compact contracts/managed/stablecoin
 ```
 
-> **Note:** Skip this step if you want to clone the [unshielded-token repository](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable by the frontend. A smart contract is already deployed on Preprod: `0c0ad6d96daa1b983751db2149a093c34ea73714c33fbad40d291d9e887f8084`
+> **Note:** Skip this step if you want to clone the [unshielded-token repository](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable by the frontend. A smart contract is already deployed on Preprod: `0c0ad6d96daa1b983751db2149a093c34ea73714c33fbad40d291d9e887f8084`. Paste this into the dashboard contract selector or set it in localStorage as `unshielded_contract_address` to use it.
 
 If you do decide to recompile and redeploy, run:
 
@@ -130,10 +129,6 @@ A simple approach to quickly deploy and save time of wallet syncing by using you
 
 Now that your smart contract is deployed on the Preprod network, the next step is to integrate it with the frontend. Features to cover are shown below in the screenshot:
 
-1. Smart contract operations: mint tokens into the vault, send tokens from the vault to an address, and deposit tokens into the vault.
-2. Statistics: total supply, smart contract (vault) balance, wallet balance.
-3. User wallet: basic operations such as transferring from your own wallet to another wallet and displaying your receiving address and balance.
-
 ![Token operations dashboard](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/nqhspr1koigqg4d8pngq.png)
 
 ---
@@ -145,13 +140,13 @@ Set up the smart contract providers
 - `privateStateProvider`: uses `levelPrivateStateProvider` for persistent localStorage
 - `publicDataProvider`: reads on-chain state from the indexer
 - `zkConfigProvider`: loads `FetchZkConfigProvider` — compiled verifiers...
-- `proofProvider`: generates zero-knowledge proofs on your proof server
+- `proofProvider`: generates zero-knowledge proofs via **connected wallet's DApp connect proof provider**
 - `walletProvider`: handles `balanceTx` via `connectedApi.balanceUnsealedTransaction`
 - `midnightProvider`: submits transactions via `connectedApi.submitTransaction`
 
 > **Note:** In this tutorial, the providers are rebuilt in every function. In a production environment, initialize them once and reuse them across all operations.
 
-The function below covers the full lifecycle of minting into the vault smart contract. Call `await mintToContract(BigInt(amount))` in the UI to execute it.
+The function below covers the full lifecycle of minting into the vault smart contract. The UI calls the store method `useWalletStore.getState().mintToContract(BigInt(amount))`, which wraps the service function shown below.
 
 It runs through four stages inside a `try/catch`:
 
@@ -162,7 +157,8 @@ export async function mintToContract(
   shieldedAddresses: { shieldedEncryptionPublicKey: string },
   amount: bigint,
   onSuccess: (txId: string) => void,
-  onError: (err: string) => void
+  onError: (err: string) => void,
+  contractAddress: string
 ): Promise<void> {
   try {
     // stages below
@@ -179,7 +175,7 @@ Define `mods` by awaiting `getModules()`, which imports the compiled smart contr
 
 ```typescript
 const mods = await getModules();
-const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, proofModule } = mods;
+const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, dappConnectorProofProvider } = mods;
 ```
 
 **2. Build providers**
@@ -188,7 +184,7 @@ const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, led
 const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
 const levelPrivateStateProvider = levelModule.levelPrivateStateProvider;
 const zkConfigProvider = new FetchZkConfigProvider(window.location.origin + CONTRACT_PATH, fetch.bind(window));
-const proofProvider = proofModule.httpClientProofProvider(PROOF_SERVER, zkConfigProvider);
+const proofProvider = await dappConnectorProofProvider(connectedApi, zkConfigProvider, ledger.CostModel.initialCostModel());
 
 const providers: any = {
   privateStateProvider: levelPrivateStateProvider({
@@ -236,7 +232,7 @@ const compiledContract = CompiledContract.make('stablecoin', contractModule.Cont
 );
 
 const contract: any = await findDeployedContract(providers, {
-  contractAddress: CONTRACT_ADDRESS,
+  contractAddress,
   compiledContract,
   privateStateId: 'stablecoinState',
   initialPrivateState: {},
@@ -252,7 +248,6 @@ const txData = await contract.callTx.mintToContract(amount);
 onSuccess(txData.public.txId);
 ```
 
-> **Note:** The proof generation might take some time before the popup appears. This example uses a local proof server at port 6300, so it is fast.
 
 ![Mint transaction success](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/3vow9usvg56pah0kzbw7.png)
 
@@ -307,7 +302,7 @@ This function takes user input and runs it through `encodeUserAddress(recipient)
 
 ![Send tokens from vault](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/k4vtqnir9kumwovgxe73.png)
 
-Now deposit the stablecoin token into the vault using `receiveUnshielded`. 
+Now deposit the token into the vault using `receiveUnshielded`. 
 
 The frontend has `handleReceive`. It functions similarly to `handleSend`: `store.receiveTokens(params...)` calls the exported `receiveTokens(amount: Uint<128>)` circuit, which contains `receiveUnshielded(color, disclose(amount))`.
 
@@ -341,24 +336,24 @@ The frontend has `handleReceive`. It functions similarly to `handleSend`: `store
 
 ## 2. Displaying statistics
 
-The vault smart contract has a state called `balance`, which returns a set of token balances. The approach here is to iterate through the balances array to find how many tokens match the token ID. For a token ID to appear, you need to execute a mint operation.
+The vault's smart contract `balance` state tracks token balances. After minting, the contract is queried via `getContractFirstTokenBalance` to identify the first token held by the contract, which is then stored as `selectedTokenId` in the Zustand store.
 
 ```typescript
-export async function getContractBalance(): Promise<bigint> {
+export async function getContractBalance(contractAddress: string, tokenId: string): Promise<bigint> {
   try {
     const mods = await getModules();
     const { indexerModule } = mods;
     const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
     const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
 
-    const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
+    const contractState = await provider.queryContractState(contractAddress);
     console.log('[getContractBalance] Contract state balance:', contractState?.balance);
 
     if (!contractState?.balance) return 0n;
 
     for (const [key, value] of contractState.balance.entries()) {
       console.log('[getContractBalance] Key:', key, 'Value:', value.toString());
-      if (key && typeof key === 'object' && 'raw' in key && key.raw === STABLECOIN_TOKEN) {
+      if (key && typeof key === 'object' && 'raw' in key && key.raw === tokenId) {
         console.log('[getContractBalance] Found balance:', value.toString());
         return value;
       }
@@ -372,16 +367,33 @@ export async function getContractBalance(): Promise<bigint> {
 }
 ```
 
-Now get the user's stablecoin balance. First call `connectedApi.getUnshieldedBalances()` to get all user wallet balances, then filter the results with `balances[STABLECOIN_TOKEN]`.
+`getContractFirstTokenBalance` functions similarly to `getContractBalance` but returns the first token found in the contract's balance map.
 
 ```typescript
-export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Promise<bigint> {
+export async function getContractFirstTokenBalance(contractAddress: string) {
+  // rest of the code
+  const contractState = await provider.queryContractState(contractAddress);
+  if (!contractState?.balance) return null;
+  for (const [key, value] of contractState.balance.entries()) {
+    if (key && typeof key === 'object' && 'raw' in key) {
+      return { tokenId: (key as any).raw, balance: value };
+    }
+  }
+  return null;
+}
+```
+
+
+Now get the user's token balance. First call `connectedApi.getUnshieldedBalances()` to get all user wallet balances, then filter the results with `balances[tokenId]`.
+
+```typescript
+export async function getUserTokenBalance(connectedApi: ConnectedAPI, tokenId: string): Promise<bigint> {
   try {
     const balances = await connectedApi.getUnshieldedBalances();
-    const stablecoinBalance = balances[STABLECOIN_TOKEN];
-    return stablecoinBalance || 0n;
+    const tokenBalance = balances[tokenId];
+    return tokenBalance || 0n;
   } catch (err) {
-    console.error('[getUserStablecoinBalance] Error:', err);
+    console.error('[getUserTokenBalance] Error:', err);
     return 0n;
   }
 }
@@ -390,12 +402,12 @@ export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Prom
 To retrieve `totalSupply`, create a function `getContractState()`. It works in three stages:
 
 ```typescript
-export async function getContractState(): Promise<ContractState> {
+export async function getContractState(contractAddress: string): Promise<ContractState> {
   try {
     // stages below
   } catch (err) {
     console.error('[ContractState] Error:', err);
-    return { totalSupply: 0n, totalBurned: 0n };
+    return { totalSupply: 0n, totalBurned: 0n, burnedBalance: 0n };
   }
 }
 ```
@@ -411,9 +423,9 @@ const { indexerModule } = mods;
 const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
 const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
 
-const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
+const contractState = await provider.queryContractState(contractAddress);
 if (!contractState) {
-  return { totalSupply: 0n, totalBurned: 0n };
+  return { totalSupply: 0n, totalBurned: 0n, burnedBalance: 0n };
 }
 ```
 
@@ -429,15 +441,23 @@ const ledgerState = contractModule.ledger(contractState.data);
 **3. Return the values**
 
 ```typescript
+let burnedBalance = 0n;
+try {
+  burnedBalance = ledgerState.burnedBalance ?? 0n;
+} catch {
+  // burnedBalance not available in older contracts
+}
+
 return {
   totalSupply: ledgerState.totalSupply,
   totalBurned: ledgerState.totalBurned,
+  burnedBalance,
 };
 ```
 
 ## 3. Wallet operations
 
-For displaying user receiving addresses and stablecoin balances, see section 2.
+For displaying user receiving addresses and token balances, see section 2.
 
 ```typescript
 const unshieldedAddress = await connectedApi.getUnshieldedAddress();
@@ -448,25 +468,25 @@ const unshieldedBalances = await connectedApi.getUnshieldedBalances();
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
-import { getUserStablecoinBalance } from '../hooks/wallet/services/contractCalls';
+import { getUserTokenBalance } from '../hooks/wallet/services/contractCalls';
 
 export function WalletInfoPage() {
-  const { connectedApi, addresses } = useWalletStore();
+  const { connectedApi, addresses, selectedTokenId } = useWalletStore();
   const [balance, setBalance] = useState<bigint | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!connectedApi) return;
+    if (!connectedApi || !selectedTokenId) return;
     
     const fetchBalance = async () => {
-      const bal = await getUserStablecoinBalance(connectedApi);
+      const bal = await getUserTokenBalance(connectedApi, selectedTokenId);
       setBalance(bal);
     };
     
     fetchBalance();
     const interval = setInterval(fetchBalance, 15000);
     return () => clearInterval(interval);
-  }, [connectedApi]);
+  }, [connectedApi, selectedTokenId]);
 
   const handleCopy = async (text: string, field: string) => {
     await navigator.clipboard.writeText(text);
@@ -487,7 +507,7 @@ export function WalletInfoPage() {
 
 ![Wallet info and balance](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/p6f6wqp5w9cxcqelbxcq.png)
 
-Next, send the stablecoin token between user wallets. The `handleSend` function — different from `contractSend` — looks like this:
+Next, send the token between user wallets. The `handleSend` function — different from `contractSend` — looks like this:
 
 ```typescript
 const handleSend = async () => {
@@ -495,28 +515,38 @@ const handleSend = async () => {
     await sendStablecoin(recipient, BigInt(amount));
   };
 ```
-`sendStablecoin` wraps `connectedApi.makeTransfer`. Instead of sending `nativeToken`, it passes the stablecoin token ID as the `type`, so the wallet knows which asset to transfer. The `makeTransfer` call below is what actually happens inside `sendStablecoin`: it constructs the output we need, balances the transaction, which is then submitted with `connectedApi.submitTransaction(result.tx)`.
+`sendStablecoin` wraps `connectedApi.makeTransfer`. Instead of sending `nativeToken`, it passes the token ID as the `type`, so the wallet knows which asset to transfer. The `makeTransfer` call constructs the output, balances the transaction, and returns a result. If the wallet already submitted the transaction (`result.tx_id`), it calls `onSuccess` directly. Otherwise, it submits the unsigned transaction (`result.tx`) via `connectedApi.submitTransaction` before calling `onSuccess`.
 
 ```typescript
 export async function sendStablecoin(
   connectedApi: ConnectedAPI,
   recipient: string,
   amount: bigint,
+  tokenId: string,
   onSuccess: () => void,
   onError: (err: string) => void
 ): Promise<void> {
   try {
     const desiredOutput: DesiredOutput = {
       kind: 'unshielded',
-      type: STABLECOIN_TOKEN,
+      type: tokenId,
       value: amount,
       recipient,
     };
     const result = await connectedApi.makeTransfer([desiredOutput]);
-       if (result.tx) {
-      // wallet returned an unsigned tx — submit it
-      await connectedApi.submitTransaction(result.tx);
+    console.log('[sendStablecoin] makeTransfer result:', result);
+
+    if (result.tx_id) {
+      onSuccess();
+      return;
     }
+
+    if (result.tx) {
+      await connectedApi.submitTransaction(result.tx);
+      onSuccess();
+      return;
+    }
+
     onSuccess();
   } catch (err) {
     if ((err as any)?.type === 'DAppConnectorAPIError' && (err as any)?.code === 'Disconnected') {
