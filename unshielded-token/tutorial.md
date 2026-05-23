@@ -110,14 +110,9 @@ compact compile contracts/Contract.compact contracts/managed/stablecoin
 
 > **Note:** Skip this step if you want to clone the [unshielded-token repository](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token). If you generate new keys, you need to redeploy because the old keys in this [path](https://github.com/0xfdbu/midnight-apps/tree/main/unshielded-token/contracts/managed/stablecoin/) would no longer be usable by the frontend. A smart contract is already deployed on Preprod: `0c0ad6d96daa1b983751db2149a093c34ea73714c33fbad40d291d9e887f8084`. Paste this into the dashboard contract selector or set it in localStorage as `unshielded_contract_address` to use it.
 
-If you do decide to recompile and redeploy, run:
-
-```shell
-MNEMONIC="24 secret seed phrase from Lace or 1AM" npx tsx scripts/go.ts
-```
-
 A simple approach to quickly deploy without waiting for wallet sync: use your existing wallet extension state via [Deploy.tsx](https://github.com/0xfdbu/midnight-apps/blob/main/unshielded-token/src/pages/Deploy.tsx) (highly recommended)
 
+After this deployment this will set the deployed smart contract address in `localStorage`.
 
 ![Deploy page showing contract deployment with connected wallet](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/u84bdf1t71eghhip6i6o.png)
 
