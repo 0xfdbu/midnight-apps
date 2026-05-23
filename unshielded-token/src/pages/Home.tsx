@@ -274,7 +274,7 @@ export function HomePage() {
                 <strong className="text-white">How it works:</strong> This DApp manages an unshielded token vault. The contract can mint new tokens, send from its balance to users, and accept deposits. The dashboard automatically detects the token held by your configured contract and selects it for all operations.
               </p>
               <p className="text-[13px] text-text-secondary leading-relaxed">
-                <strong className="text-white">Typical flow:</strong> Deploy a contract (or paste an existing address) → The dashboard auto-detects the contract&apos;s token → Mint tokens into the vault → Use Contract Send to distribute to user wallets → Or deposit tokens back into the vault with Receive Tokens.
+                <strong className="text-white">Typical flow:</strong> Deploy a contract (or paste an existing address) → Mint tokens into the vault → The dashboard detects the token once it exists in the contract&apos;s balance → Use Contract Send to distribute to user wallets → Or deposit tokens back into the vault with Receive Tokens.
               </p>
             </div>
           </div>
