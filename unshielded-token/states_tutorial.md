@@ -206,13 +206,23 @@ Your wallet holds many tokens. `0000...` represents native tNIGHT. Looking up wa
 
 ### Where do token colors come from?
 
-Every token on Midnight has a unique color: a 32-byte hex string that identifies the token type on the ledger. You can see this color in the `[getUserStablecoinBalance] Raw balances:` log. The color is generated when the token is first minted, and it is not hardcoded in the smart contract source code.
+Every token on Midnight has a unique color: a 32-byte hex string that identifies the token type on the ledger. You can see this color in the `[getUserTokenBalance] Raw balances:` log. The color is generated when the token is first minted, and it is not hardcoded in the smart contract source code.
 
-If you do not know the color yet, inspect the vault's `ContractState` balance map after at least one mint transaction has occurred. Store the color in a constant, and reuse it for balance lookups:
+If you do not know the color yet, call `getContractFirstTokenBalance(contractAddress)`. It reads the contract's balance map and returns the first token held by the contract, without the need for hardcoding:
 
 ```typescript
-export const STABLECOIN_TOKEN =
-  '88aca75e4dfebf5991aee89918528338809dacb71d62c4b7ed8a713839e46bbb';
+export async function getContractFirstTokenBalance(contractAddress: string): Promise<{ tokenId: string; balance: bigint } | null> {
+  const { indexerModule } = await getModules();
+  const provider = indexerModule.indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
+  const contractState = await provider.queryContractState(contractAddress);
+  if (!contractState?.balance) return null;
+  for (const [key, value] of contractState.balance.entries()) {
+    if (key && typeof key === 'object' && 'raw' in key) {
+      return { tokenId: (key as any).raw, balance: value };
+    }
+  }
+  return null;
+}
 ```
 
 ---
@@ -292,7 +302,7 @@ export function HomePage() {
 
 The hook returns `null` while loading, so the frontend does not crash and uses `?? 0n` as a fallback. The grid uses `grid-cols-2` on mobile and `grid-cols-4` on larger screens. The vault balance shows held burned tokens, so users know the raw balance includes burned tokens. 
 
-You can use this pattern with any other smart contract; all that changes are the ledger fields you deserialize and the token you look up by color in the balance map.
+You can use this pattern with any other smart contract; all that changes are the ledger fields you deserialize and the token auto-detected from the contract's balance map.
 
 
 ![Dashboard showing four stat cards: Total Supply, Total Burned, Vault Balance, and Wallet Balance](https://dev-to-uploads.s3.amazonaws.com/uploads/articles/ddhtg8c5d28fyn4j7m06.png)
@@ -333,7 +343,7 @@ const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
       };
 ```
 
-The WebSocket is used as a notification system. Whenever a message is received, `fetchState()` is called, which in turn triggers `getContractState()`, `getContractBalance()`, and `getUserStablecoinBalance()`.
+The WebSocket is used as a notification system. Whenever a message is received, `fetchState()` is called, which in turn queries `getContractState(contractAddress)`, `getContractBalance(contractAddress, selectedTokenId)`, and `getUserTokenBalance(connectedApi, selectedTokenId)`.
 
 ```typescript
   const fetchState = useCallback(async () => {
@@ -581,7 +591,7 @@ The hybrid approach used in `useContractState` is robust: it uses a background p
 
 You now have a complete pipeline for querying smart contract state from a React/TypeScript frontend on the Midnight network. The pattern is always the same: build an `indexerPublicDataProvider`, call the query method that works for your needs, deserialize the ledger state with your compiled smart contract's `ledger()` constructor, and render the fields in your UI.
 
-This is not limited to stablecoin vaults. Any smart contract that exposes `export ledger` fields can be queried the same way. You only need to change the ledger fields you choose to deserialize, for example `totalSupply` or `totalEmployees`, and the token colors you look up in the balance map.
+This is not limited to stablecoin vaults. Any smart contract that exposes `export ledger` fields can be queried the same way. You only need to change the ledger fields you choose to deserialize, for example `totalSupply` or `totalEmployees`, and the tokens auto-detected from the contract's balance map.
 
 ---
 
