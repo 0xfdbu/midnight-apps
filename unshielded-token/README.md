@@ -34,8 +34,21 @@ npm run dev
 npm run build
 ```
 
+## Usage flow
+
+The unshielded token DApp follows a vault pattern. The smart contract holds tokens on-chain and operates as a central treasury:
+
+1. **Deploy** — Create a new stablecoin vault contract. The dashboard automatically switches to the newly deployed address.
+2. **Mint to contract** — Generate new tokens and send them directly to the contract balance. This increases total supply and funds the vault.
+3. **Contract Send** — Distribute tokens from the contract to any wallet address. The recipient sees the tokens in their wallet balance.
+4. **Receive (deposit)** — Send tokens from your wallet back into the contract, making them available for the contract to manage.
+5. **Burn** — Destroy tokens from the contract, permanently reducing total supply.
+
+Direct wallet-to-wallet transfers (the **Send** page) bypass the contract entirely and use the wallet's native transfer API.
+
 ## Notes
 
 - DUST values displayed with 6 decimal places (divide by 1,000,000)
 - Uses `balanceUnsealedTransaction` for transaction balancing
 - Uses `queryContractState` to read contract balance
+- Active contract address is persisted in localStorage and can be changed from the dashboard

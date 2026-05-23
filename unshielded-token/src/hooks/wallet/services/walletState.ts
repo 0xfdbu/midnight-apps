@@ -1,6 +1,6 @@
-import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type { ConnectedAPI, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
-import { STABLECOIN_TOKEN } from '../wallet.constants';
+// STABLECOIN_TOKEN removed — token is now passed dynamically
 import { handleWalletError } from '../wallet.utils';
 
 export async function connectWallet(
@@ -88,13 +88,14 @@ export async function sendStablecoin(
   connectedApi: ConnectedAPI,
   recipient: string,
   amount: bigint,
+  tokenId: string,
   onSuccess: () => void,
   onError: (err: string) => void
 ): Promise<void> {
   try {
     const desiredOutput: DesiredOutput = {
       kind: 'unshielded',
-      type: STABLECOIN_TOKEN,
+      type: tokenId,
       value: amount,
       recipient,
     };

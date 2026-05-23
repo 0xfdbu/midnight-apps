@@ -5,14 +5,17 @@ import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 
 import {
   COMPATIBLE_CONNECTOR_API_VERSION,
+  NATIVE_TOKEN_ID,
+  getActiveContractAddress,
+  getSelectedTokenId,
 } from './wallet/wallet.constants';
 import type { WalletAddresses, WalletBalances } from './wallet/wallet.types';
 import { isWalletError, handleWalletError, extractNodeError } from './wallet/wallet.utils';
 import {
-  mintToContract,
-  burnFromContract,
-  receiveTokens,
-  sendToUser,
+  mintToContract as mintToContractFn,
+  burnFromContract as burnFromContractFn,
+  receiveTokens as receiveTokensFn,
+  sendToUser as sendToUserFn,
 } from './wallet/services/contractCalls';
 import {
   loadWalletState,
@@ -33,6 +36,9 @@ export interface WalletState {
   isSubmitting: boolean;
   transactionHash: string | null;
   showAccountModal: boolean;
+  contractAddress: string | null;
+  selectedTokenId: string | null;
+  availableTokens: string[];
   setWallet: (wallet: InitialAPI | null) => void;
   setConnectedApi: (api: ConnectedAPI | null) => void;
   setIsConnecting: (connecting: boolean) => void;
@@ -41,6 +47,8 @@ export interface WalletState {
   setIsSubmitting: (submitting: boolean) => void;
   setTransactionHash: (hash: string | null) => void;
   setShowAccountModal: (show: boolean) => void;
+  setContractAddress: (address: string | null) => void;
+  setSelectedTokenId: (tokenId: string | null) => void;
   setAddresses: (addresses: WalletAddresses) => void;
   setBalances: (balances: WalletBalances) => void;
   setConfig: (config: WalletConfiguration) => void;
@@ -83,6 +91,9 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   isSubmitting: false,
   transactionHash: null,
   showAccountModal: false,
+  contractAddress: getActiveContractAddress(),
+  selectedTokenId: getSelectedTokenId(),
+  availableTokens: [],
 
   setWallet: (wallet) => set({ wallet }),
   setConnectedApi: (connectedApi) => set({ connectedApi, isConnected: !!connectedApi }),
@@ -92,12 +103,30 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   setIsSubmitting: (isSubmitting) => set({ isSubmitting }),
   setTransactionHash: (transactionHash) => set({ transactionHash }),
   setShowAccountModal: (showAccountModal) => set({ showAccountModal }),
+  setContractAddress: (address) => {
+    if (address) {
+      localStorage.setItem('unshielded_contract_address', address);
+      set({ contractAddress: address });
+    } else {
+      localStorage.removeItem('unshielded_contract_address');
+      set({ contractAddress: null });
+    }
+  },
+  setSelectedTokenId: (tokenId) => {
+    if (tokenId) {
+      localStorage.setItem('unshielded_selected_token', tokenId);
+      set({ selectedTokenId: tokenId });
+    } else {
+      localStorage.removeItem('unshielded_selected_token');
+      set({ selectedTokenId: null });
+    }
+  },
   setAddresses: (addresses) => set({ addresses }),
   setBalances: (balances) => set({ balances }),
   setConfig: (config) => set({ config }),
 
   connect: async (networkId) => {
-    const { wallet, setIsConnecting, setConnectedApi, setError, setShowAccountModal } = get();
+    const { wallet, setIsConnecting, setConnectedApi, setError } = get();
     if (!wallet) {
       setError('No wallet found');
       return;
@@ -125,7 +154,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   loadWalletState: async () => {
-    const { connectedApi, setIsLoadingState, setError, setAddresses, setBalances, setConfig } = get();
+    const { connectedApi, setIsLoadingState, setError, setAddresses, setBalances, setConfig, setSelectedTokenId } = get();
     if (!connectedApi) return;
 
     setIsLoadingState(true);
@@ -145,6 +174,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
           setAddresses(addresses);
           setBalances(balances);
           setConfig(config as WalletConfiguration);
+          const tokens = Object.keys(balances.unshielded).filter((id) => id !== NATIVE_TOKEN_ID);
+          set({ availableTokens: tokens });
+          // Auto-select the only available token if none is currently selected
+          const current = get().selectedTokenId;
+          if (!current && tokens.length === 1) {
+            setSelectedTokenId(tokens[0]);
+          }
         },
         (err) => {
           if (isWalletError(err as any) && (err as any).code === 'Disconnected') {
@@ -166,9 +202,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   mintToContract: async (amount) => {
-    const { connectedApi, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
+    const { connectedApi, contractAddress, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
     if (!connectedApi) {
       setError('Not connected');
+      return;
+    }
+    if (!contractAddress) {
+      setError('No contract configured. Deploy one first.');
       return;
     }
 
@@ -187,7 +227,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       const shieldedAddresses = await connectedApi.getShieldedAddresses();
       const coinPublicKey = shieldedAddresses.shieldedCoinPublicKey;
 
-      await mintToContract(
+      await mintToContractFn(
         connectedApi,
         coinPublicKey,
         shieldedAddresses,
@@ -198,7 +238,8 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         },
         (errMsg: string) => {
           setError(errMsg.length > 100 ? errMsg.substring(0, 100) + '...' : errMsg);
-        }
+        },
+        contractAddress
       );
     } catch (err) {
       console.error('Mint error:', err);
@@ -214,9 +255,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   burnFromContract: async (amount) => {
-    const { connectedApi, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
+    const { connectedApi, contractAddress, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
     if (!connectedApi) {
       setError('Not connected');
+      return;
+    }
+    if (!contractAddress) {
+      setError('No contract configured. Deploy one first.');
       return;
     }
 
@@ -235,7 +280,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       const shieldedAddresses = await connectedApi.getShieldedAddresses();
       const coinPublicKey = shieldedAddresses.shieldedCoinPublicKey;
 
-      await burnFromContract(
+      await burnFromContractFn(
         connectedApi,
         coinPublicKey,
         shieldedAddresses,
@@ -246,7 +291,8 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         },
         (errMsg: string) => {
           setError(errMsg.length > 100 ? errMsg.substring(0, 100) + '...' : errMsg);
-        }
+        },
+        contractAddress
       );
     } catch (err) {
       console.error('Burn error:', err);
@@ -262,9 +308,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   sendStablecoin: async (recipient, amount) => {
-    const { connectedApi, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
+    const { connectedApi, selectedTokenId, setIsSubmitting, setError, setTransactionHash, loadWalletState } = get();
     if (!connectedApi) {
       setError('Not connected');
+      return;
+    }
+    if (!selectedTokenId) {
+      setError('No token selected. Choose a token from the dashboard.');
       return;
     }
 
@@ -284,6 +334,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         connectedApi,
         recipient,
         amount,
+        selectedTokenId,
         () => {
           setTransactionHash('transfer-success');
           loadWalletState();
@@ -305,11 +356,31 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     }
   },
 
-  receiveTokens,
+  receiveTokens: async (connectedApi, coinPublicKey, shieldedAddresses, amount, onSuccess, onError) => {
+    const { contractAddress } = get();
+    if (!contractAddress) {
+      onError('No contract configured. Deploy one first.');
+      return;
+    }
+    await receiveTokensFn(
+      connectedApi,
+      coinPublicKey,
+      shieldedAddresses,
+      amount,
+      onSuccess,
+      onError,
+      contractAddress
+    );
+  },
 
   contractSend: async (connectedApi, coinPublicKey, shieldedAddresses, amount, recipientAddress, onSuccess, onError) => {
+    const { contractAddress } = get();
+    if (!contractAddress) {
+      onError('No contract configured. Deploy one first.');
+      return;
+    }
     try {
-      await sendToUser(connectedApi, coinPublicKey, shieldedAddresses, amount, recipientAddress, onSuccess, onError);
+      await sendToUserFn(connectedApi, coinPublicKey, shieldedAddresses, amount, recipientAddress, onSuccess, onError, contractAddress);
     } catch (err) {
       console.error('Contract send error:', err);
       onError(err instanceof Error ? err.message : String(err));

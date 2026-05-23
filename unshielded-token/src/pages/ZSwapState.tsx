@@ -4,7 +4,7 @@ import { useWalletStore } from '../hooks/useWallet';
 import { getZSwapAndContractState } from '../hooks/wallet/services/contractCalls';
 
 export function ZSwapStatePage() {
-  const { isConnected } = useWalletStore();
+  const { isConnected, contractAddress } = useWalletStore();
   const [state, setState] = useState<{
     firstFree: bigint;
     totalSupply: bigint;
@@ -19,8 +19,12 @@ export function ZSwapStatePage() {
     let cancelled = false;
 
     async function load() {
+      if (!contractAddress) {
+        setLoading(false);
+        return;
+      }
       try {
-        const result = await getZSwapAndContractState();
+        const result = await getZSwapAndContractState(contractAddress);
         if (!cancelled) {
           if (result) {
             setState(result);
@@ -38,7 +42,7 @@ export function ZSwapStatePage() {
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [contractAddress]);
 
   if (!isConnected) {
     return (
@@ -71,6 +75,25 @@ export function ZSwapStatePage() {
         </div>
 
         <div className="p-6 space-y-5">
+          {/* No Contract Warning */}
+          {!contractAddress && (
+            <div className="flex items-start gap-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+              <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-amber-400 font-medium">No contract configured</p>
+                <p className="text-[12px] text-amber-400/70">Deploy a contract to view its ZSwap state.</p>
+                <Link
+                  to="/deploy"
+                  className="inline-block mt-1 text-[12px] text-amber-400 underline underline-offset-2 hover:text-amber-300"
+                >
+                  Go to Deploy →
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Info Box */}
           <div className="flex gap-3 p-4 bg-indigo-500/5 rounded-xl border-l-2 border-indigo-500/30">
             <div className="w-5 h-5 rounded-full bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">

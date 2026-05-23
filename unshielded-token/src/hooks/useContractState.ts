@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  CONTRACT_ADDRESS,
   INDEXER_WS,
 } from './wallet/wallet.constants';
 import {
   getContractState,
   getContractBalance,
-  getUserStablecoinBalance,
+  getUserTokenBalance,
 } from './wallet/services/contractCalls';
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 
@@ -21,6 +20,8 @@ export interface ContractStateSnapshot {
 
 export function useContractState(
   connectedApi: ConnectedAPI | null,
+  contractAddress: string | null,
+  selectedTokenId: string | null,
   opts: { pollInterval?: number } = {}
 ) {
   const { pollInterval = 15000 } = opts;
@@ -33,11 +34,16 @@ export function useContractState(
   const intentionalCloseRef = useRef(new WeakSet<WebSocket>());
 
   const fetchState = useCallback(async () => {
+    if (!contractAddress) {
+      setState(null);
+      setLoading(false);
+      return;
+    }
     try {
       const [s, cb, wb] = await Promise.all([
-        getContractState(),
-        getContractBalance(),
-        connectedApi ? getUserStablecoinBalance(connectedApi) : Promise.resolve(0n),
+        getContractState(contractAddress),
+        selectedTokenId ? getContractBalance(contractAddress, selectedTokenId) : Promise.resolve(0n),
+        connectedApi && selectedTokenId ? getUserTokenBalance(connectedApi, selectedTokenId) : Promise.resolve(0n),
       ]);
       // Usable contract balance = raw balance minus tokens that were burned into the contract
       const usableContractBalance = cb > s.burnedBalance ? cb - s.burnedBalance : 0n;
@@ -54,13 +60,13 @@ export function useContractState(
     } finally {
       setLoading(false);
     }
-  }, [connectedApi]);
+  }, [connectedApi, contractAddress, selectedTokenId]);
 
   // Initial fetch + polling fallback
   // TEMP: Polling disabled to test WebSocket-only updates
 
   useEffect(() => {
-    if (!connectedApi) {
+    if (!connectedApi || !contractAddress) {
       setLoading(false);
       return;
     }
@@ -71,12 +77,12 @@ export function useContractState(
       fetchState();
     }, pollInterval);
     return () => clearInterval(id);
-  }, [fetchState, pollInterval, connectedApi]);
+  }, [fetchState, pollInterval, connectedApi, contractAddress, selectedTokenId]);
   
 
   // WebSocket subscription for push updates
   useEffect(() => {
-    if (!connectedApi) return;
+    if (!connectedApi || !contractAddress) return;
 
     let ws: WebSocket | null = null;
     let reconnectDelay = 1000;
@@ -104,7 +110,7 @@ export function useContractState(
                 }
               }
             `,
-            variables: { address: CONTRACT_ADDRESS },
+            variables: { address: contractAddress },
           },
         }));
       };
@@ -178,7 +184,7 @@ export function useContractState(
         // close() on a CONNECTING socket produces a console warning.
       }
     };
-  }, [connectedApi, fetchState]);
+  }, [connectedApi, fetchState, contractAddress, selectedTokenId]);
 
   return { state, loading, error, refetch: fetchState };
 }

@@ -3,19 +3,24 @@ import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 
 export function BurnPage() {
-  const { burnFromContract, isSubmitting, transactionHash, error } = useWalletStore();
+  const { burnFromContract, isSubmitting, transactionHash, error, contractAddress } = useWalletStore();
   const [amount, setAmount] = useState('');
-  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (transactionHash && !error) {
-      setDone(true);
-    }
-  }, [transactionHash, error]);
+    useWalletStore.getState().setTransactionHash(null);
+    useWalletStore.getState().setError(null);
+  }, []);
+
+  const [status, setStatus] = useState<string | null>(null);
 
   const handleBurn = async () => {
     if (!amount) return;
-    await burnFromContract(BigInt(amount));
+    setStatus('Burning tokens...');
+    try {
+      await burnFromContract(BigInt(amount));
+    } finally {
+      setStatus(null);
+    }
   };
 
   return (
@@ -40,6 +45,25 @@ export function BurnPage() {
         </div>
 
         <div className="p-6 space-y-5">
+          {/* No Contract Warning */}
+          {!contractAddress && (
+            <div className="flex items-start gap-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+              <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-amber-400 font-medium">No contract configured</p>
+                <p className="text-[12px] text-amber-400/70">Deploy a contract before you can burn tokens.</p>
+                <Link
+                  to="/deploy"
+                  className="inline-block mt-1 text-[12px] text-amber-400 underline underline-offset-2 hover:text-amber-300"
+                >
+                  Go to Deploy →
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Info Box */}
           <div className="flex gap-3 p-4 bg-rose-500/5 rounded-xl border-l-2 border-rose-500/30">
             <div className="w-5 h-5 rounded-full bg-rose-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -68,16 +92,27 @@ export function BurnPage() {
           </div>
 
           {/* Burn Button */}
-          <button
-            onClick={handleBurn}
-            disabled={!amount || isSubmitting}
-            className="w-full py-3.5 bg-rose-500 hover:bg-rose-400 disabled:bg-bg-tertiary disabled:text-text-muted text-white font-medium rounded-xl transition-all active:scale-[0.98]"
-          >
-            {isSubmitting ? 'Burning...' : 'Burn Tokens'}
-          </button>
+          {isSubmitting && (
+            <div className="flex items-center gap-3 p-4 bg-bg-tertiary/40 rounded-xl border border-border/80">
+              <div className="w-5 h-5 border-2 border-border border-t-rose-400 rounded-full animate-spin" />
+              <div>
+                <p className="text-[13px] text-white/60">{status || 'Burning...'}</p>
+              </div>
+            </div>
+          )}
+
+          {!isSubmitting && (
+            <button
+              onClick={handleBurn}
+              disabled={!amount || !contractAddress}
+              className="w-full py-3.5 bg-rose-500 hover:bg-rose-400 disabled:bg-bg-tertiary disabled:text-text-muted text-white font-medium rounded-xl transition-all active:scale-[0.98]"
+            >
+              Burn Tokens
+            </button>
+          )}
 
           {/* Success */}
-          {done && (
+          {transactionHash && !error && (
             <div className="flex items-start gap-3 p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
               <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/80" />

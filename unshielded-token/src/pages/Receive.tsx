@@ -1,45 +1,82 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
+import { getContractFirstTokenBalance } from '../hooks/wallet/services/contractCalls';
+
+function formatTokenId(id: string | null): string {
+  if (!id) return '—';
+  if (id.length <= 16) return id;
+  return `${id.slice(0, 8)}…${id.slice(-8)}`;
+}
 
 export function ReceivePage() {
-  const { connectedApi, isSubmitting, transactionHash, error } = useWalletStore();
+  const { connectedApi, isSubmitting, transactionHash, error, contractAddress } = useWalletStore();
   const [amount, setAmount] = useState('');
-  const [done, setDone] = useState(false);
+  const [contractBalance, setContractBalance] = useState<bigint>(0n);
+  const [contractTokenId, setContractTokenId] = useState<string | null>(null);
+
+  const handleRefreshBalance = async () => {
+    if (!contractAddress) return;
+    try {
+      const result = await getContractFirstTokenBalance(contractAddress);
+      if (result) {
+        setContractBalance(result.balance);
+        setContractTokenId(result.tokenId);
+      } else {
+        setContractBalance(0n);
+        setContractTokenId(null);
+      }
+    } catch (err) {
+      console.error('Failed to get contract balance:', err);
+    }
+  };
 
   useEffect(() => {
-    if (transactionHash && !error) {
-      setDone(true);
+    if (contractAddress) {
+      handleRefreshBalance();
     }
-  }, [transactionHash, error]);
+  }, [contractAddress, transactionHash]);
+
+  useEffect(() => {
+    useWalletStore.getState().setTransactionHash(null);
+    useWalletStore.getState().setError(null);
+  }, []);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
 
   const handleReceive = async () => {
     if (!amount || !connectedApi) return;
-    
-    const store = useWalletStore.getState();
-    const shieldedAddresses = await connectedApi.getShieldedAddresses();
-    const coinPublicKey = shieldedAddresses.shieldedCoinPublicKey;
 
-    await store.receiveTokens(
-      connectedApi,
-      coinPublicKey,
-      shieldedAddresses,
-      BigInt(amount),
-      (txId: string) => {
-        useWalletStore.getState().setTransactionHash(txId);
-        useWalletStore.getState().loadWalletState();
-      },
-      (errMsg: string) => {
-        useWalletStore.getState().setError(errMsg);
-      }
-    );
-  };
-
-  const handleReset = () => {
-    setAmount('');
-    setDone(false);
+    setSubmitting(true);
+    setStatus('Depositing tokens...');
     useWalletStore.getState().setTransactionHash(null);
     useWalletStore.getState().setError(null);
+
+    try {
+      const store = useWalletStore.getState();
+      const shieldedAddresses = await connectedApi.getShieldedAddresses();
+      const coinPublicKey = shieldedAddresses.shieldedCoinPublicKey;
+
+      await store.receiveTokens(
+        connectedApi,
+        coinPublicKey,
+        shieldedAddresses,
+        BigInt(amount),
+        (txId: string) => {
+          useWalletStore.getState().setTransactionHash(txId);
+          useWalletStore.getState().loadWalletState();
+        },
+        (errMsg: string) => {
+          useWalletStore.getState().setError(errMsg);
+        }
+      );
+    } catch (err) {
+      useWalletStore.getState().setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+      setStatus(null);
+    }
   };
 
   return (
@@ -61,7 +98,36 @@ export function ReceivePage() {
         </div>
 
         <div className="p-6 space-y-5">
-          
+          {/* No Contract Warning */}
+          {!contractAddress && (
+            <div className="flex items-start gap-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+              <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-amber-400 font-medium">No contract configured</p>
+                <p className="text-[12px] text-amber-400/70">Deploy a contract before you can deposit tokens into it.</p>
+                <Link
+                  to="/deploy"
+                  className="inline-block mt-1 text-[12px] text-amber-400 underline underline-offset-2 hover:text-amber-300"
+                >
+                  Go to Deploy →
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Contract Balance */}
+          <div className="flex items-center justify-between p-4 bg-bg-tertiary rounded-xl">
+            <div>
+              <span className="text-sm text-text-secondary">Contract Balance</span>
+              {contractTokenId && (
+                <p className="text-[10px] font-mono text-text-muted/60 mt-0.5">{formatTokenId(contractTokenId)}</p>
+              )}
+            </div>
+            <span className="text-lg font-semibold text-white">{contractBalance.toString()} USD</span>
+          </div>
+
           {/* Info Box */}
           <div className="flex gap-3 p-4 bg-cyan-500/5 rounded-xl border-l-2 border-cyan-500/30">
             <div className="w-5 h-5 rounded-full bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -83,7 +149,7 @@ export function ReceivePage() {
           )}
 
           {/* Success Display */}
-          {done && (
+          {transactionHash && !error && (
             <div className="flex items-start gap-3 p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
               <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                 <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
@@ -105,10 +171,9 @@ export function ReceivePage() {
                 type="number"
                 step="any"
                 value={amount}
-                onChange={(e) => { setAmount(e.target.value); setDone(false); }}
+                onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
-                disabled={done}
-                className="w-full px-4 py-4 bg-bg-tertiary border border-border rounded-xl focus:border-border-hover focus:ring-1 focus:ring-border-hover outline-none text-[24px] font-semibold tracking-tight text-white placeholder:text-text-muted/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed pr-16"
+                className="w-full px-4 py-4 bg-bg-tertiary border border-border rounded-xl focus:border-border-hover focus:ring-1 focus:ring-border-hover outline-none text-[24px] font-semibold tracking-tight text-white placeholder:text-text-muted/30 transition-all pr-16"
               />
               <div className="absolute right-0 top-0 bottom-0 flex items-center px-4 pointer-events-none">
                 <span className="text-[14px] font-bold text-text-muted">USD</span>
@@ -117,30 +182,22 @@ export function ReceivePage() {
           </div>
 
           {/* Submit Button */}
-          {done ? (
-            <button
-              onClick={handleReset}
-              className="w-full py-3.5 bg-white text-black rounded-xl text-[15px] font-semibold hover:bg-gray-100 active:scale-[0.985] transition-all duration-150 flex items-center justify-center gap-2 mt-2"
-            >
-              Deposit More
-            </button>
-          ) : (
+          {submitting && (
+            <div className="flex items-center gap-3 p-4 bg-bg-tertiary/40 rounded-xl border border-border/80">
+              <div className="w-5 h-5 border-2 border-border border-t-cyan-400 rounded-full animate-spin" />
+              <div>
+                <p className="text-[13px] text-white/60">{status}</p>
+              </div>
+            </div>
+          )}
+
+          {!submitting && (
             <button
               onClick={handleReceive}
-              disabled={isSubmitting || !amount}
+              disabled={!amount || !contractAddress}
               className="w-full py-3.5 bg-white text-black rounded-xl text-[15px] font-semibold hover:bg-gray-100 active:scale-[0.985] transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 mt-2"
             >
-              {isSubmitting ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Processing...
-                </>
-              ) : (
-                'Deposit Tokens'
-              )}
+              Deposit Tokens
             </button>
           )}
           

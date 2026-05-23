@@ -1,10 +1,8 @@
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import {
   CONTRACT_PATH,
-  CONTRACT_ADDRESS,
   INDEXER_HTTP,
   INDEXER_WS,
-  PROOF_SERVER,
   STABLECOIN_TOKEN,
 } from '../wallet.constants';
 import { uint8ArrayToHex, hexToUint8Array } from '../../../lib/utils';
@@ -17,17 +15,17 @@ let cachedModules: any = null;
 async function getModules() {
   if (cachedModules) return cachedModules;
 
-  const [indexerModule, { FetchZkConfigProvider }, levelModule, { CompiledContract }, ledger, proofModule, addressModule] = await Promise.all([
+  const [indexerModule, { FetchZkConfigProvider }, levelModule, { CompiledContract }, ledger, { dappConnectorProofProvider }, addressModule] = await Promise.all([
     import('@midnight-ntwrk/midnight-js-indexer-public-data-provider'),
     import('@midnight-ntwrk/midnight-js-fetch-zk-config-provider'),
     import('@midnight-ntwrk/midnight-js-level-private-state-provider'),
     import('@midnight-ntwrk/compact-js'),
     import('@midnight-ntwrk/ledger-v8'),
-    import('@midnight-ntwrk/midnight-js-http-client-proof-provider'),
+    import('@midnight-ntwrk/midnight-js-dapp-connector-proof-provider'),
     import('@midnight-ntwrk/wallet-sdk-address-format'),
   ]);
 
-  cachedModules = { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, proofModule, addressModule };
+  cachedModules = { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, dappConnectorProofProvider, addressModule };
   return cachedModules;
 }
 
@@ -40,7 +38,7 @@ export interface ContractState {
   burnedBalance: bigint;
 }
 
-export async function getContractState(): Promise<ContractState> {
+export async function getContractState(contractAddress: string): Promise<ContractState> {
   try {
     const mods = await getModules();
     const { indexerModule } = mods;
@@ -48,7 +46,7 @@ export async function getContractState(): Promise<ContractState> {
     const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
     const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
 
-    const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
+    const contractState = await provider.queryContractState(contractAddress);
     if (!contractState) {
       console.log('[ContractState] No contract state found');
       return { totalSupply: 0n, totalBurned: 0n, burnedBalance: 0n };
@@ -87,20 +85,21 @@ export async function mintToContract(
   shieldedAddresses: { shieldedEncryptionPublicKey: string },
   amount: bigint,
   onSuccess: (txId: string) => void,
-  onError: (err: string) => void
+  onError: (err: string) => void,
+  contractAddress: string
 ): Promise<void> {
   try {
     console.log('[Mint] === Starting mintToContract ===');
     console.log('[Mint] Amount:', amount.toString());
-    console.log('[Mint] Contract:', CONTRACT_ADDRESS);
+    console.log('[Mint] Contract:', contractAddress);
 
     const mods = await getModules();
-    const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, proofModule } = mods;
+    const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, dappConnectorProofProvider } = mods;
 
     const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
     const levelPrivateStateProvider = levelModule.levelPrivateStateProvider;
     const zkConfigProvider = new FetchZkConfigProvider(window.location.origin + CONTRACT_PATH, fetch.bind(window));
-    const proofProvider = proofModule.httpClientProofProvider(PROOF_SERVER, zkConfigProvider);
+    const proofProvider = await dappConnectorProofProvider(connectedApi, zkConfigProvider, ledger.CostModel.initialCostModel());
 
     const providers: any = {
       privateStateProvider: levelPrivateStateProvider({
@@ -143,7 +142,7 @@ export async function mintToContract(
     );
 
     const contract: any = await findDeployedContract(providers, {
-      contractAddress: CONTRACT_ADDRESS,
+      contractAddress,
       compiledContract,
       privateStateId: 'stablecoinState',
       initialPrivateState: {},
@@ -169,20 +168,21 @@ export async function burnFromContract(
   shieldedAddresses: { shieldedEncryptionPublicKey: string },
   amount: bigint,
   onSuccess: (txId: string) => void,
-  onError: (err: string) => void
+  onError: (err: string) => void,
+  contractAddress: string
 ): Promise<void> {
   try {
     console.log('[Burn] === Starting burnStablecoin ===');
     console.log('[Burn] Amount:', amount.toString());
-    console.log('[Burn] Contract:', CONTRACT_ADDRESS);
+    console.log('[Burn] Contract:', contractAddress);
 
     const mods = await getModules();
-    const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, proofModule } = mods;
+    const { indexerModule, FetchZkConfigProvider, levelModule, CompiledContract, ledger, dappConnectorProofProvider } = mods;
 
     const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
     const levelPrivateStateProvider = levelModule.levelPrivateStateProvider;
     const zkConfigProvider = new FetchZkConfigProvider(window.location.origin + CONTRACT_PATH, fetch.bind(window));
-    const proofProvider = proofModule.httpClientProofProvider(PROOF_SERVER, zkConfigProvider);
+    const proofProvider = await dappConnectorProofProvider(connectedApi, zkConfigProvider, ledger.CostModel.initialCostModel());
 
     const providers: any = {
       privateStateProvider: levelPrivateStateProvider({
@@ -225,7 +225,7 @@ export async function burnFromContract(
     );
 
     const contract: any = await findDeployedContract(providers, {
-      contractAddress: CONTRACT_ADDRESS,
+      contractAddress,
       compiledContract,
       privateStateId: 'stablecoinState',
       initialPrivateState: {},
@@ -277,12 +277,12 @@ async function buildContractProviders(
   shieldedAddresses: { shieldedEncryptionPublicKey: string }
 ) {
   const mods = await getModules();
-  const { indexerModule, FetchZkConfigProvider, levelModule, ledger, proofModule } = mods;
+  const { indexerModule, FetchZkConfigProvider, levelModule, ledger, dappConnectorProofProvider } = mods;
 
   const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
   const levelPrivateStateProvider = levelModule.levelPrivateStateProvider;
   const zkConfigProvider = new FetchZkConfigProvider(window.location.origin + CONTRACT_PATH, fetch.bind(window));
-  const proofProvider = proofModule.httpClientProofProvider(PROOF_SERVER, zkConfigProvider);
+  const proofProvider = await dappConnectorProofProvider(connectedApi, zkConfigProvider, ledger.CostModel.initialCostModel());
 
   return {
     privateStateProvider: levelPrivateStateProvider({
@@ -314,7 +314,7 @@ async function buildContractProviders(
   };
 }
 
-async function getContract(connectedApi: ConnectedAPI, coinPublicKey: string, shieldedAddresses: { shieldedEncryptionPublicKey: string }) {
+async function getContract(connectedApi: ConnectedAPI, coinPublicKey: string, shieldedAddresses: { shieldedEncryptionPublicKey: string }, contractAddress: string) {
   const [{ findDeployedContract }, contractModule, mods] = await Promise.all([
     import('@midnight-ntwrk/midnight-js-contracts'),
     import(CONTRACT_PATH + '/contract/index.js'),
@@ -329,7 +329,7 @@ async function getContract(connectedApi: ConnectedAPI, coinPublicKey: string, sh
   );
 
   return findDeployedContract(providers, {
-    contractAddress: CONTRACT_ADDRESS,
+    contractAddress,
     compiledContract,
     privateStateId: 'stablecoinState',
     initialPrivateState: {},
@@ -342,13 +342,14 @@ export async function receiveTokens(
   shieldedAddresses: { shieldedEncryptionPublicKey: string },
   amount: bigint,
   onSuccess: (txId: string) => void,
-  onError: (err: string) => void
+  onError: (err: string) => void,
+  contractAddress: string
 ): Promise<void> {
   try {
     console.log('[Receive] === Starting receiveTokens ===');
     console.log('[Receive] Amount:', amount.toString());
 
-    const contract: any = await getContract(connectedApi, coinPublicKey, shieldedAddresses);
+    const contract: any = await getContract(connectedApi, coinPublicKey, shieldedAddresses, contractAddress);
 
     console.log('[Receive] Calling contract.callTx.receiveTokens...');
     const txData = await contract.callTx.receiveTokens(amount);
@@ -367,13 +368,14 @@ export async function sendToUser(
   amount: bigint,
   recipientAddress: Uint8Array,
   onSuccess: (txId: string) => void,
-  onError: (err: string) => void
+  onError: (err: string) => void,
+  contractAddress: string
 ): Promise<void> {
   try {
     console.log('[ContractSend] === Starting sendToUser ===');
     console.log('[ContractSend] Amount:', amount.toString());
 
-    const contract: any = await getContract(connectedApi, coinPublicKey, shieldedAddresses);
+    const contract: any = await getContract(connectedApi, coinPublicKey, shieldedAddresses, contractAddress);
 
     console.log('[ContractSend] Calling contract.callTx.sendToUser...');
     const recipient = { bytes: recipientAddress };
@@ -386,27 +388,32 @@ export async function sendToUser(
   }
 }
 
-export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Promise<bigint> {
+export async function getUserTokenBalance(connectedApi: ConnectedAPI, tokenId: string): Promise<bigint> {
   try {
     const balances = await connectedApi.getUnshieldedBalances();
-    console.log('[getUserStablecoinBalance] Raw balances:', balances);
-    const stablecoinBalance = balances[STABLECOIN_TOKEN];
-    console.log('[getUserStablecoinBalance] STABLECOIN_TOKEN:', STABLECOIN_TOKEN, '=>', stablecoinBalance?.toString() ?? '0');
-    return stablecoinBalance || 0n;
+    console.log('[getUserTokenBalance] Raw balances:', balances);
+    const tokenBalance = balances[tokenId];
+    console.log('[getUserTokenBalance] tokenId:', tokenId, '=>', tokenBalance?.toString() ?? '0');
+    return tokenBalance || 0n;
   } catch (err) {
-    console.error('[getUserStablecoinBalance] Error:', err);
+    console.error('[getUserTokenBalance] Error:', err);
     return 0n;
   }
 }
 
-export async function getZSwapAndContractState(): Promise<{ firstFree: bigint; totalSupply: bigint; totalBurned: bigint; burnedBalance: bigint; dustParams: any } | null> {
+/** @deprecated Use getUserTokenBalance with an explicit tokenId */
+export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Promise<bigint> {
+  return getUserTokenBalance(connectedApi, STABLECOIN_TOKEN);
+}
+
+export async function getZSwapAndContractState(contractAddress: string): Promise<{ firstFree: bigint; totalSupply: bigint; totalBurned: bigint; burnedBalance: bigint; dustParams: any } | null> {
   try {
     const mods = await getModules();
     const { indexerModule } = mods;
     const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
     const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
 
-    const result = await provider.queryZSwapAndContractState(CONTRACT_ADDRESS);
+    const result = await provider.queryZSwapAndContractState(contractAddress);
     if (!result) {
       console.log('[ZSwapState] No zswap+contract state found');
       return null;
@@ -443,21 +450,21 @@ export async function getZSwapAndContractState(): Promise<{ firstFree: bigint; t
   }
 }
 
-export async function getContractBalance(): Promise<bigint> {
+export async function getContractBalance(contractAddress: string, tokenId: string): Promise<bigint> {
   try {
     const mods = await getModules();
     const { indexerModule } = mods;
     const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
     const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
 
-    const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
+    const contractState = await provider.queryContractState(contractAddress);
     console.log('[getContractBalance] Contract state balance:', contractState?.balance);
 
     if (!contractState?.balance) return 0n;
 
     for (const [key, value] of contractState.balance.entries()) {
       console.log('[getContractBalance] Key:', key, 'Value:', value.toString());
-      if (key && typeof key === 'object' && 'raw' in key && key.raw === STABLECOIN_TOKEN) {
+      if (key && typeof key === 'object' && 'raw' in key && key.raw === tokenId) {
         console.log('[getContractBalance] Found balance:', value.toString());
         return value;
       }
@@ -467,5 +474,33 @@ export async function getContractBalance(): Promise<bigint> {
   } catch (err) {
     console.error('[getContractBalance] Error:', err);
     return 0n;
+  }
+}
+
+export async function getContractFirstTokenBalance(contractAddress: string): Promise<{ tokenId: string; balance: bigint } | null> {
+  try {
+    const mods = await getModules();
+    const { indexerModule } = mods;
+    const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
+    const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
+
+    const contractState = await provider.queryContractState(contractAddress);
+    console.log('[getContractFirstTokenBalance] Contract state balance:', contractState?.balance);
+
+    if (!contractState?.balance) return null;
+
+    for (const [key, value] of contractState.balance.entries()) {
+      console.log('[getContractFirstTokenBalance] Key:', key, 'Value:', value.toString());
+      if (key && typeof key === 'object' && 'raw' in key) {
+        const tokenId = (key as any).raw as string;
+        console.log('[getContractFirstTokenBalance] First token:', tokenId, 'Balance:', value.toString());
+        return { tokenId, balance: value };
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.error('[getContractFirstTokenBalance] Error:', err);
+    return null;
   }
 }

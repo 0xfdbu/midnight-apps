@@ -1,0 +1,1 @@
+import{_ as e}from"./dist-DQ0zK4OL.js";var t=async(e,t)=>e.getProvingProvider(t.asKeyMaterialProvider()),n=async(n,r,i)=>e(await t(n,r),i);export{t as n,n as t};

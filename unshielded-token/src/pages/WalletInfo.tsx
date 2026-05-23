@@ -1,25 +1,46 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
-import { getUserStablecoinBalance } from '../hooks/wallet/services/contractCalls';
+import { getUserTokenBalance, getContractFirstTokenBalance } from '../hooks/wallet/services/contractCalls';
+
+function formatTokenId(id: string | null): string {
+  if (!id) return '—';
+  if (id.length <= 16) return id;
+  return `${id.slice(0, 8)}…${id.slice(-8)}`;
+}
 
 export function WalletInfoPage() {
-  const { connectedApi, addresses } = useWalletStore();
+  const { connectedApi, addresses, selectedTokenId, contractAddress } = useWalletStore();
   const [balance, setBalance] = useState<bigint | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [contractTokenId, setContractTokenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!contractAddress) {
+      setContractTokenId(null);
+      return;
+    }
+    getContractFirstTokenBalance(contractAddress).then((result) => {
+      setContractTokenId(result?.tokenId ?? null);
+    });
+  }, [contractAddress]);
 
   useEffect(() => {
     if (!connectedApi) return;
     
     const fetchBalance = async () => {
-      const bal = await getUserStablecoinBalance(connectedApi);
+      if (!selectedTokenId) {
+        setBalance(null);
+        return;
+      }
+      const bal = await getUserTokenBalance(connectedApi, selectedTokenId);
       setBalance(bal);
     };
     
     fetchBalance();
     const interval = setInterval(fetchBalance, 15000);
     return () => clearInterval(interval);
-  }, [connectedApi]);
+  }, [connectedApi, selectedTokenId]);
 
   const handleCopy = async (text: string, field: string) => {
     await navigator.clipboard.writeText(text);
@@ -58,12 +79,42 @@ export function WalletInfoPage() {
         <div className="p-6 space-y-4">
           
           {/* Balance Display */}
-          <div className="flex items-center justify-between p-4 bg-bg-tertiary/50 rounded-xl border border-border/40">
-            <div>
-              <span className="text-[12px] text-text-muted uppercase tracking-wider">Stablecoin Balance</span>
-              <div className="text-[28px] font-bold text-white mt-1">{formatBalance(balance)}</div>
+          <div className="p-4 bg-bg-tertiary/50 rounded-xl border border-border/40 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] text-text-muted uppercase tracking-wider">Token Balance</span>
+              <span className="text-[16px] font-medium text-text-muted">USD</span>
             </div>
-            <div className="text-[16px] font-medium text-text-muted">USD</div>
+
+            {!contractAddress && (
+              <div className="space-y-1">
+                <p className="text-[13px] text-text-muted">No contract configured.</p>
+                <Link
+                  to="/deploy"
+                  className="inline-block text-[12px] text-indigo-400 underline underline-offset-2 hover:text-indigo-300"
+                >
+                  Deploy a contract first →
+                </Link>
+              </div>
+            )}
+
+            {contractAddress && !contractTokenId && (
+              <div className="space-y-1">
+                <p className="text-[13px] text-text-muted">No tokens in contract.</p>
+                <Link
+                  to="/mint"
+                  className="inline-block text-[12px] text-indigo-400 underline underline-offset-2 hover:text-indigo-300"
+                >
+                  Mint tokens first →
+                </Link>
+              </div>
+            )}
+
+            {contractAddress && contractTokenId && (
+              <>
+                <div className="text-[28px] font-bold text-white">{formatBalance(balance)}</div>
+                <p className="text-[10px] font-mono text-text-muted/60">{formatTokenId(contractTokenId)}</p>
+              </>
+            )}
           </div>
 
           {/* Unshielded Address */}

@@ -5,17 +5,16 @@ import {
   CONTRACT_PATH,
   INDEXER_HTTP,
   INDEXER_WS,
-  PROOF_SERVER,
 } from '../hooks/wallet/wallet.constants';
 import { uint8ArrayToHex, hexToUint8Array } from '../lib/utils';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
-import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
+import { dappConnectorProofProvider } from '@midnight-ntwrk/midnight-js-dapp-connector-proof-provider';
 import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
 import { deployContract } from '@midnight-ntwrk/midnight-js-contracts';
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
-import { Transaction } from '@midnight-ntwrk/ledger-v8';
+import { Transaction, CostModel } from '@midnight-ntwrk/ledger-v8';
 
 setNetworkId('preprod');
 
@@ -58,7 +57,7 @@ export function DeployPage() {
         window.location.origin + CONTRACT_PATH,
         fetch.bind(window)
       );
-      const proofProvider = httpClientProofProvider(PROOF_SERVER, zkConfigProvider);
+      const proofProvider = await dappConnectorProofProvider(connectedApi, zkConfigProvider, CostModel.initialCostModel());
 
       const providers: any = {
         privateStateProvider: levelPrivateStateProvider({
@@ -107,6 +106,7 @@ export function DeployPage() {
 
       const address = deployed.deployTxData.public.contractAddress;
       const txId = deployed.deployTxData.public.txId;
+      useWalletStore.getState().setContractAddress(address);
       setContractAddress(address);
       setTxHash(txId);
       setStatus(null);
@@ -169,7 +169,7 @@ export function DeployPage() {
               <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/80" />
             </div>
             <p className="text-[13px] text-text-secondary leading-relaxed">
-              This deploys a fresh unshielded stablecoin contract. The address is displayed after deployment but not saved — update <code className="text-indigo-300">wallet.constants.ts</code> to use it.
+              This deploys a fresh unshielded stablecoin contract. The address is saved automatically and the dashboard switches to it.
             </p>
           </div>
 
@@ -197,6 +197,13 @@ export function DeployPage() {
                 <CopyIcon className="w-4 h-4" />
                 Copy Address
               </button>
+
+              <Link
+                to="/"
+                className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 text-white font-medium rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-center"
+              >
+                Go to Dashboard
+              </Link>
 
               <button
                 onClick={() => {

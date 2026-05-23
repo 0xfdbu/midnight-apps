@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 import { ConnectButton } from '../components/ui/ConnectButton';
 import { useContractState } from '../hooks/useContractState';
+import { getContractFirstTokenBalance } from '../hooks/wallet/services/contractCalls';
 
 // --- Icons ---
 function GithubIcon({ className }: { className?: string }) {
@@ -29,15 +31,52 @@ function ChevronRightIcon({ className }: { className?: string }) {
   );
 }
 
+function formatTokenId(id: string): string {
+  if (id.length <= 16) return id;
+  return `${id.slice(0, 8)}…${id.slice(-8)}`;
+}
+
 export function HomePage() {
-  const { isConnected, connectedApi } = useWalletStore();
-  const { state } = useContractState(connectedApi, { pollInterval: 15000 });
+  const { isConnected, connectedApi, contractAddress, setContractAddress, selectedTokenId, setSelectedTokenId } = useWalletStore();
+  const { state } = useContractState(connectedApi, contractAddress, selectedTokenId, { pollInterval: 15000 });
+  const [showContractSettings, setShowContractSettings] = useState(false);
+  const [newContractAddress, setNewContractAddress] = useState('');
+  const [contractTokenId, setContractTokenId] = useState<string | null>(null);
 
   const totalSupply = state?.totalSupply ?? 0n;
   const totalBurned = state?.totalBurned ?? 0n;
   const burnedBalance = state?.burnedBalance ?? 0n;
   const contractBalance = state?.contractBalance ?? 0n;
   const walletBalance = state?.walletBalance ?? 0n;
+
+  useEffect(() => {
+    if (!contractAddress) {
+      setContractTokenId(null);
+      return;
+    }
+    getContractFirstTokenBalance(contractAddress).then((result) => {
+      if (result) {
+        setContractTokenId(result.tokenId);
+        setSelectedTokenId(result.tokenId);
+      } else {
+        setContractTokenId(null);
+      }
+    });
+  }, [contractAddress, setSelectedTokenId]);
+
+  const handleSaveContract = () => {
+    if (newContractAddress.trim()) {
+      setContractAddress(newContractAddress.trim());
+      setNewContractAddress('');
+      setShowContractSettings(false);
+    }
+  };
+
+  const handleClearContract = () => {
+    setContractAddress(null);
+    setNewContractAddress('');
+    setShowContractSettings(false);
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -113,6 +152,88 @@ export function HomePage() {
             <p className="text-text-muted text-[14px] mt-1">What would you like to do?</p>
           </div>
 
+          {/* Active Contract */}
+          <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-widest text-text-muted/60">Active Contract</span>
+              <button
+                onClick={() => setShowContractSettings((s) => !s)}
+                className="text-[12px] text-text-muted hover:text-white transition-colors"
+              >
+                {showContractSettings ? 'Close' : contractAddress ? 'Change' : 'Set'}
+              </button>
+            </div>
+            {contractAddress ? (
+              <p className="text-[12px] font-mono text-text-secondary break-all">{contractAddress}</p>
+            ) : (
+              <p className="text-[12px] text-text-muted">No contract configured. Deploy one or paste an address below.</p>
+            )}
+
+            {showContractSettings && (
+              <div className="pt-3 border-t border-border/50 space-y-3">
+                <input
+                  type="text"
+                  value={newContractAddress}
+                  onChange={(e) => setNewContractAddress(e.target.value)}
+                  placeholder="Paste contract address..."
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-xl text-[12px] text-white placeholder-text-muted/40 focus:outline-none focus:border-border-hover font-mono"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveContract}
+                    disabled={!newContractAddress.trim()}
+                    className="px-4 py-2 bg-indigo-500 hover:bg-indigo-400 disabled:bg-bg-tertiary disabled:text-text-muted text-white text-[12px] font-medium rounded-xl transition-all"
+                  >
+                    Save
+                  </button>
+                  {contractAddress && (
+                    <button
+                      onClick={handleClearContract}
+                      className="px-4 py-2 bg-bg-secondary hover:bg-bg-tertiary border border-border text-text-secondary text-[12px] font-medium rounded-xl transition-all"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Token Selector */}
+          <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-widest text-text-muted/60">Selected Token</span>
+            </div>
+            {!contractAddress && (
+              <div className="space-y-1">
+                <p className="text-[12px] text-text-muted">No contract configured.</p>
+                <Link
+                  to="/deploy"
+                  className="inline-block text-[12px] text-indigo-400 underline underline-offset-2 hover:text-indigo-300"
+                >
+                  Deploy a contract first →
+                </Link>
+              </div>
+            )}
+            {contractAddress && !contractTokenId && (
+              <div className="space-y-1">
+                <p className="text-[12px] text-text-muted">No tokens in contract.</p>
+                <Link
+                  to="/mint"
+                  className="inline-block text-[12px] text-indigo-400 underline underline-offset-2 hover:text-indigo-300"
+                >
+                  Mint tokens first →
+                </Link>
+              </div>
+            )}
+            {contractAddress && contractTokenId && (
+              <div className="space-y-1">
+                <p className="text-[12px] font-mono text-white">{formatTokenId(contractTokenId)}</p>
+                <p className="text-[11px] font-mono text-text-muted break-all">{contractTokenId}</p>
+              </div>
+            )}
+          </div>
+
           {/* Stats Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
@@ -131,8 +252,30 @@ export function HomePage() {
               )}
             </div>
             <div className="bg-bg-tertiary/40 border border-border/80 rounded-2xl p-4">
-              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">Wallet Balance</p>
+              <p className="text-[11px] uppercase tracking-widest text-text-muted/60 mb-1">
+                Wallet Balance
+                {selectedTokenId && (
+                  <span className="block normal-case tracking-normal text-[9px] text-text-muted/40 mt-0.5 font-mono">
+                    {formatTokenId(selectedTokenId)}
+                  </span>
+                )}
+              </p>
               <p className="text-xl font-semibold text-white">{walletBalance.toString()}</p>
+            </div>
+          </div>
+
+          {/* Usage Guidance */}
+          <div className="flex gap-3 p-4 bg-indigo-500/5 rounded-xl border-l-2 border-indigo-500/30">
+            <div className="w-5 h-5 rounded-full bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/80" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-[13px] text-text-secondary leading-relaxed">
+                <strong className="text-white">How it works:</strong> This DApp manages an unshielded stablecoin vault. The contract holds tokens on-chain and can mint, burn, or send them.
+              </p>
+              <p className="text-[13px] text-text-secondary leading-relaxed">
+                <strong className="text-white">Typical flow:</strong> Deploy a contract → Mint tokens to the contract → Use Contract Send to distribute tokens to user wallets → Tokens appear in the recipient&apos;s wallet balance.
+              </p>
             </div>
           </div>
 

@@ -2,20 +2,26 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useWalletStore } from '../hooks/useWallet';
 
+function formatTokenId(id: string | null): string {
+  if (!id) return '—';
+  if (id.length <= 16) return id;
+  return `${id.slice(0, 8)}…${id.slice(-8)}`;
+}
+
 export function SendPage() {
-  const { sendStablecoin, isSubmitting, transactionHash, error } = useWalletStore();
+  const { sendStablecoin, isSubmitting, transactionHash, error, selectedTokenId } = useWalletStore();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
-  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (transactionHash && !error) {
-      setDone(true);
-    }
-  }, [transactionHash, error]);
+    useWalletStore.getState().setTransactionHash(null);
+    useWalletStore.getState().setError(null);
+  }, []);
 
   const handleSend = async () => {
     if (!amount || !recipient) return;
+    useWalletStore.getState().setTransactionHash(null);
+    useWalletStore.getState().setError(null);
     await sendStablecoin(recipient, BigInt(amount));
   };
 
@@ -40,13 +46,37 @@ export function SendPage() {
         </div>
 
         <div className="p-6 space-y-5">
+          {/* No Token Warning */}
+          {!selectedTokenId && (
+            <div className="flex items-start gap-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+              <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-amber-400 font-medium">No token selected</p>
+                <p className="text-[12px] text-amber-400/70">Select a token from the dashboard before sending.</p>
+                <Link
+                  to="/"
+                  className="inline-block mt-1 text-[12px] text-amber-400 underline underline-offset-2 hover:text-amber-300"
+                >
+                  Go to Dashboard →
+                </Link>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 p-4 bg-indigo-500/5 rounded-xl border-l-2 border-indigo-500/30">
             <div className="w-5 h-5 rounded-full bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/80" />
             </div>
-            <p className="text-[13px] text-text-secondary leading-relaxed">
-              Send stablecoins directly to any wallet address.
-            </p>
+            <div className="space-y-1">
+              <p className="text-[13px] text-text-secondary leading-relaxed">
+                Send tokens directly to any wallet address.
+              </p>
+              {selectedTokenId && (
+                <p className="text-[11px] font-mono text-text-muted">Token: {formatTokenId(selectedTokenId)}</p>
+              )}
+            </div>
           </div>
 
           <div>
@@ -78,13 +108,13 @@ export function SendPage() {
 
           <button
             onClick={handleSend}
-            disabled={!amount || !recipient || isSubmitting}
+            disabled={!amount || !recipient || isSubmitting || !selectedTokenId}
             className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-bg-tertiary disabled:text-text-muted text-white font-medium rounded-xl transition-all active:scale-[0.98]"
           >
-            {isSubmitting ? 'Sending...' : 'Send'}
+            {isSubmitting ? 'Sending...' : selectedTokenId ? 'Send' : 'Select a token'}
           </button>
 
-          {done && (
+          {transactionHash && !error && (
             <div className="flex items-start gap-3 p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
               <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/80" />
