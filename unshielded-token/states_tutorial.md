@@ -18,7 +18,7 @@
   - `@midnight-ntwrk/dapp-connector-api`
   - `@midnight-ntwrk/ledger-v8`
   - `@midnight-ntwrk/midnight-js-fetch-zk-config-provider`
-  - `@midnight-ntwrk/midnight-js-http-client-proof-provider`
+
   - `@midnight-ntwrk/midnight-js-level-private-state-provider`
   - `@midnight-ntwrk/midnight-js-network-id`
   - `react`, `react-dom`, `react-router-dom`
@@ -100,21 +100,21 @@ A simple entry point is `queryContractState`. It returns `null` immediately if t
 `queryContractState` works well if you need the smart contract's public ledger data.
 
 ```typescript
-export async function getContractBalance(): Promise<bigint> {
+export async function getContractBalance(contractAddress: string, tokenId: string): Promise<bigint> {
   try {
     const mods = await getModules();
     const { indexerModule } = mods;
     const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
     const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
 
-    const contractState = await provider.queryContractState(CONTRACT_ADDRESS);
+    const contractState = await provider.queryContractState(contractAddress);
     console.log('[getContractBalance] Contract state balance:', contractState?.balance);
 
     if (!contractState?.balance) return 0n;
 
     for (const [key, value] of contractState.balance.entries()) {
       console.log('[getContractBalance] Key:', key, 'Value:', value.toString());
-      if (key && typeof key === 'object' && 'raw' in key && key.raw === STABLECOIN_TOKEN) {
+      if (key && typeof key === 'object' && 'raw' in key && key.raw === tokenId) {
         console.log('[getContractBalance] Found balance:', value.toString());
         return value;
       }
@@ -137,14 +137,14 @@ export async function getContractBalance(): Promise<bigint> {
 If your smart contract interacts with shielded coins, call `queryZSwapAndContractState` to get the global `ZswapChainState`, the smart contract state, and the ledger parameters in one atomic query. This is more consistent between the two states because they come from the same block.
 
 ```typescript
-export async function getZSwapAndContractState(): Promise<{ firstFree: bigint; totalSupply: bigint; totalBurned: bigint; burnedBalance: bigint; dustParams: any } | null> {
+export async function getZSwapAndContractState(contractAddress: string): Promise<{ firstFree: bigint; totalSupply: bigint; totalBurned: bigint; burnedBalance: bigint; dustParams: any } | null> {
   try {
     const mods = await getModules();
     const { indexerModule } = mods;
     const indexerPublicDataProvider = indexerModule.indexerPublicDataProvider;
     const provider = indexerPublicDataProvider(INDEXER_HTTP, INDEXER_WS);
 
-    const result = await provider.queryZSwapAndContractState(CONTRACT_ADDRESS);
+    const result = await provider.queryZSwapAndContractState(contractAddress);
     if (!result) {
       console.log('[ZSwapState] No zswap+contract state found');
       return null;
@@ -186,15 +186,15 @@ export async function getZSwapAndContractState(): Promise<{ firstFree: bigint; t
 The `@midnight-ntwrk/dapp-connector-api` package exposes `getUnshieldedBalances()` on the `ConnectedAPI`, which returns the user-owned tokens.
 
 ```typescript
-export async function getUserStablecoinBalance(connectedApi: ConnectedAPI): Promise<bigint> {
+export async function getUserTokenBalance(connectedApi: ConnectedAPI, tokenId: string): Promise<bigint> {
   try {
     const balances = await connectedApi.getUnshieldedBalances();
-    console.log('[getUserStablecoinBalance] Raw balances:', balances);
-    const stablecoinBalance = balances[STABLECOIN_TOKEN];
-    console.log('[getUserStablecoinBalance] STABLECOIN_TOKEN:', STABLECOIN_TOKEN, '=>', stablecoinBalance?.toString() ?? '0');
-    return stablecoinBalance || 0n;
+    console.log('[getUserTokenBalance] Raw balances:', balances);
+    const tokenBalance = balances[tokenId];
+    console.log('[getUserTokenBalance] tokenId:', tokenId, '=>', tokenBalance?.toString() ?? '0');
+    return tokenBalance || 0n;
   } catch (err) {
-    console.error('[getUserStablecoinBalance] Error:', err);
+    console.error('[getUserTokenBalance] Error:', err);
     return 0n;
   }
 }
@@ -248,8 +248,8 @@ import { useContractState } from '../hooks/useContractState';
 // .. other utilities
 
 export function HomePage() {
-  const { isConnected, connectedApi } = useWalletStore();
-  const { state } = useContractState(connectedApi, { pollInterval: 15000 });
+  const { isConnected, connectedApi, contractAddress, selectedTokenId } = useWalletStore();
+  const { state } = useContractState(connectedApi, contractAddress, selectedTokenId, { pollInterval: 15000 });
 
   const totalSupply = state?.totalSupply ?? 0n;
   const totalBurned = state?.totalBurned ?? 0n;
@@ -327,7 +327,7 @@ const INDEXER_WS = 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
                 }
               }
             `,
-            variables: { address: CONTRACT_ADDRESS },
+            variables: { address: contractAddress },
           },
         }));
       };
@@ -337,11 +337,16 @@ The WebSocket is used as a notification system. Whenever a message is received, 
 
 ```typescript
   const fetchState = useCallback(async () => {
+    if (!contractAddress) {
+      setState(null);
+      setLoading(false);
+      return;
+    }
     try {
       const [s, cb, wb] = await Promise.all([
-        getContractState(),
-        getContractBalance(),
-        connectedApi ? getUserStablecoinBalance(connectedApi) : Promise.resolve(0n),
+        getContractState(contractAddress),
+        selectedTokenId ? getContractBalance(contractAddress, selectedTokenId) : Promise.resolve(0n),
+        connectedApi && selectedTokenId ? getUserTokenBalance(connectedApi, selectedTokenId) : Promise.resolve(0n),
       ]);
       // Usable contract balance = raw balance minus tokens that were burned into the contract
       const usableContractBalance = cb > s.burnedBalance ? cb - s.burnedBalance : 0n;
@@ -358,7 +363,7 @@ The WebSocket is used as a notification system. Whenever a message is received, 
     } finally {
       setLoading(false);
     }
-  }, [connectedApi]);
+  }, [connectedApi, contractAddress, selectedTokenId]);
 ```
 
 ### The `useContractState` hook
@@ -368,13 +373,12 @@ This project implements the full pattern in `src/hooks/useContractState.ts`. It 
 ```typescript
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  CONTRACT_ADDRESS,
   INDEXER_WS,
 } from './wallet/wallet.constants';
 import {
   getContractState,
   getContractBalance,
-  getUserStablecoinBalance,
+  getUserTokenBalance,
 } from './wallet/services/contractCalls';
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 
@@ -389,6 +393,8 @@ export interface ContractStateSnapshot {
 
 export function useContractState(
   connectedApi: ConnectedAPI | null,
+  contractAddress: string | null,
+  selectedTokenId: string | null,
   opts: { pollInterval?: number } = {}
 ) {
   const { pollInterval = 15000 } = opts;
@@ -401,11 +407,16 @@ export function useContractState(
   const intentionalCloseRef = useRef(new WeakSet<WebSocket>());
 
   const fetchState = useCallback(async () => {
+    if (!contractAddress) {
+      setState(null);
+      setLoading(false);
+      return;
+    }
     try {
       const [s, cb, wb] = await Promise.all([
-        getContractState(),
-        getContractBalance(),
-        connectedApi ? getUserStablecoinBalance(connectedApi) : Promise.resolve(0n),
+        getContractState(contractAddress),
+        selectedTokenId ? getContractBalance(contractAddress, selectedTokenId) : Promise.resolve(0n),
+        connectedApi && selectedTokenId ? getUserTokenBalance(connectedApi, selectedTokenId) : Promise.resolve(0n),
       ]);
       // Usable contract balance = raw balance minus tokens that were burned into the contract
       const usableContractBalance = cb > s.burnedBalance ? cb - s.burnedBalance : 0n;
@@ -422,11 +433,11 @@ export function useContractState(
     } finally {
       setLoading(false);
     }
-  }, [connectedApi]);
+  }, [connectedApi, contractAddress, selectedTokenId]);
 
   // Initial fetch + polling fallback
   useEffect(() => {
-    if (!connectedApi) {
+    if (!connectedApi || !contractAddress) {
       setLoading(false);
       return;
     }
@@ -437,11 +448,11 @@ export function useContractState(
       fetchState();
     }, pollInterval);
     return () => clearInterval(id);
-  }, [fetchState, pollInterval, connectedApi]);
+  }, [fetchState, pollInterval, connectedApi, contractAddress, selectedTokenId]);
 
   // WebSocket subscription for push updates
   useEffect(() => {
-    if (!connectedApi) return;
+    if (!connectedApi || !contractAddress) return;
 
     let ws: WebSocket | null = null;
     let reconnectDelay = 1000;
@@ -469,7 +480,7 @@ export function useContractState(
                 }
               }
             `,
-            variables: { address: CONTRACT_ADDRESS },
+            variables: { address: contractAddress },
           },
         }));
       };
@@ -542,7 +553,7 @@ export function useContractState(
         // close() on a CONNECTING socket produces a console warning.
       }
     };
-  }, [connectedApi, fetchState]);
+  }, [connectedApi, fetchState, contractAddress, selectedTokenId]);
 
   return { state, loading, error, refetch: fetchState };
 }
