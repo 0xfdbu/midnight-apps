@@ -24,18 +24,8 @@ This document explains how these tutorials and repositories were built, who wrot
 | README(s) | AI (human-directed) | Generated from project structure and feature lists / sometimes from tutorial | — |
 | Grammar and Midnight style format | AI | Applied `Style.md` rules (active voice, sentence case, Oxford comma, etc.) | Author reviewed; over-edits that changed the author's voice were reverted |
 | Section titles and headings | Mixed | AI generated initial titles for all passages, Formatted titles markdown + numbers | Most kept as-is; some corrected or edited for clarity |
-| Cross-references and file links | AI | Generated inline links to source files (e.g., "view the full code in...") | —
-
-## Feedback application
-
-The `midnight-attestation-dapp` tutorial was reviewed by a human mentor. The table below describes how the feedback was applied.
-
-| Task | Primary Executor | AI Role | Human Role |
-|---|---|---|---|
-| Editorial feedback (structure, setup framing, prerequisites, context, style) | AI | Rewrote sections, added headings, reordered content, applied `Style.md` rules | Prompted changes, reviewed output, occasionally reverted over-edits |
-| Technical corrections (pragma, compiler version, `publicKey()` circuit, multi-domain framing, cast note, connector vocabulary, `TRACKED_CONTRACT` placeholder) | AI | Verified claims against official Midnight docs and source code; inserted corrected prose and code snippets | Provided feedback items, prompted fixes, verified final accuracy |
-| Fact-checking and verification | AI | Cross-referenced tutorial claims with cloned Midnight docs, MCP tools, and local source code; compiled the contract with `compactc-fixed 0.30.0` | Reviewed verification results and asked follow-up questions |
-| Final review and sign-off | Human | — | Confirmed all mentor feedback items were addressed and approved the final version |
+| Cross-references and file links | AI | Generated inline links to source files (e.g., "view the full code in...") | — |
+| Feedback application | AI (human-prompted) | Verified claims against official Midnight docs and source code, then applied mentor feedback to the `midnight-attestation-dapp` tutorial: structure, setup framing, prerequisites, context, technical corrections, and `Style.md` formatting | Prompted the AI to verify and apply each feedback item; reviewed output and corrected where needed |
 
 ## AI tooling
 
