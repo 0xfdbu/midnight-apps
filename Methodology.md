@@ -4,13 +4,24 @@ This document explains how these tutorials and repositories were built, who wrot
 
 ## Scope
 
-| | |
-|---|---|
+### Environment & Dependencies
+
+| Component | Version / Target |
+| --- | --- |
 | **Network** | Preprod |
-| **Compact compiler** | 0.30.0 |
+| **Compact Compiler** | 0.30.0 |
 | **Midnight.js** | 4.0.4 |
 | **DApp Connector API** | 4.0.1 |
-| **Wallets tested** | 1AM (primarly everywhere) , Lace (minimally and before v2) , GSD (connection only) |
+
+### Wallet Compatibility Testing
+
+| Wallet | Testing Depth & Scope |
+| --- | --- |
+| **1AM Wallet** | Primary environment; extensively tested across all features |
+| **Lace** | Minimal testing (evaluated prior to Lace v2 release - Stability issues encountered Post V2) |
+| **GSD** | Connection testing only |
+
+
 
 ## Who wrote what
 
@@ -26,7 +37,7 @@ This document explains how these tutorials and repositories were built, who wrot
 | Grammar and Midnight style format | AI | Applied `Style.md` rules (active voice, sentence case, Oxford comma, etc.) | Over-edits that changed the author's voice were reverted |
 | Section titles and headings | Mixed | AI generated initial titles for all passages, Formatted titles markdown + numbers | Most kept as-is; some corrected or edited for clarity |
 | Cross-references and file links | AI | Generated inline links to source files (e.g., "view the full code in...") | — |
-| Feedback application | AI (human-prompted) | Verified claims against official Midnight docs, then applied feedback: structure, setup framing, prerequisites, context, technical corrections, and `Style.md` formatting | Prompted the AI to verify and apply each feedback item; reviewed output and corrected where needed |
+| Feedback application | AI (human-prompted) | Verified claims against official Midnight docs, then applied feedback: structure, setup framing, prerequisites, context, technical corrections, and `Style.md` formatting | Prompted the AI to verify and apply each feedback item; reviewed output and tweaked/corrected where needed |
 
 ## AI tooling
 
