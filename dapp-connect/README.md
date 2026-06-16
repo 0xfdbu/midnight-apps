@@ -51,7 +51,7 @@ npm install
 ### 2. Start the proof server
 
 ```bash
-docker run -p 6300:6300 midnightnetwork/proof-server:8.0.3
+docker run -p 6300:6300 midnightntwrk/proof-server:8.0.3
 ```
 
 ### 3. Start the frontend
