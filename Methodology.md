@@ -9,6 +9,7 @@ This document explains how these tutorials and repositories were built, who wrot
 | Component | Version / Target |
 | --- | --- |
 | **Network** | Preprod |
+| **Preview testing** | Used minimally when Preprod was unstable |
 | **Compact Compiler** | 0.30.0 |
 | **Midnight.js** | 4.0.4 |
 | **DApp Connector API** | 4.0.1 |
