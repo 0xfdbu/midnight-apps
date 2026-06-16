@@ -45,7 +45,7 @@ Reviewer feedback was applied iteratively. The human shared feedback from review
 
 **Human role:** Prompted the AI to apply each feedback item; reviewed output and redirected prompts as needed. Manually tested code changes through the UI and console logs to verify they worked as expected.
 
-**AI role:** Verified claims against official Midnight docs where applicable, then applied feedback covering structure, setup framing, prerequisites, context, technical corrections, and `Style.md` formatting as well as adding text. Generated all file edits and ran static type checks.
+**AI role:** Verified claims against official Midnight docs where applicable, then applied feedback covering structure, setup framing, prerequisites, context, technical corrections, and `Style.md` formatting as well as adding text. Generated all file edits.
 
 ## Acknowledgments
 
