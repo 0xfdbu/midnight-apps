@@ -26,7 +26,7 @@ This document explains how these tutorials and repositories were built, who wrot
 
 ## Who wrote what
 
-> **Note:** In the "Tutorial prose" row, "passages" refers to narrative prose paragraphs and explanations. Tables and generated reference sections (such as Prerequisites/Dependencies) are treated separately.
+> **Note:** In the "Tutorial prose" row, "passages" refers to narrative prose paragraphs. Tables and generated reference sections (such as Prerequisites/Dependencies) are treated separately.
 
 | Artifact | Primary Author | AI Role | Human Role |
 |----------|---------------|---------|--------------|
