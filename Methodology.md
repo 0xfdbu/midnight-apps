@@ -43,9 +43,9 @@ This document explains how these tutorials and repositories were built, who wrot
 
 ## How feedback was applied
 
-Reviewer feedback was applied iteratively. The human shared feedback from reviewers, discussed items with the AI, and directed which changes to apply. The AI implemented the changes, and the human reviewed the output and redirected prompts as needed.
+Reviewer feedback was applied iteratively. The human shared feedback from reviewers, discussed items with the AI, and directed which changes to apply. The AI implemented the changes, and the human reviewed the output — often through AI-generated CHANGELOGs, sometimes through direct diffs — and redirected prompts as needed.
 
-**Human role:** Prompted the AI to apply each feedback item; reviewed output and redirected prompts as needed. Manually tested code changes through the UI and console logs to verify they worked as expected.
+**Human role:** Prompted the AI to apply each feedback item; reviewed output — often via AI-generated CHANGELOGs, sometimes directly — and redirected prompts as needed. Manually tested code changes through the UI and console logs to verify they worked as expected.
 
 **AI role:** Verified claims against official Midnight docs where applicable, then applied feedback covering structure, setup framing, prerequisites, context, technical corrections, and `Style.md` formatting as well as adding text. Generated all file edits.
 
