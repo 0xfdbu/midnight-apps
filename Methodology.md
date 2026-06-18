@@ -26,7 +26,7 @@ This document explains how these tutorials and repositories were built, who wrot
 
 ## Who wrote what
 
-Note: In the "Tutorial prose" row, "passages" refers to narrative prose paragraphs or a distinct set of bullet points. Percentages and thresholds are calculated relative to the final surviving text; text that was removed entirely is excluded from the total volume before determining the majority. Tables, troubleshooting sections, and generated reference sections are treated separately.
+Note: In the "Tutorial prose" row, "passages" refers to narrative prose paragraphs or a distinct set of bullet points. Percentages and thresholds are calculated relative to the final surviving text; text that was removed entirely is excluded from the total volume before determining the majority. Tables, troubleshooting sections, and generated reference sections (Cross-references and file links included) are treated separately.
 
 | Artifact | Primary Author | AI Role | Human Role |
 |----------|---------------|---------|--------------|
