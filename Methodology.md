@@ -26,7 +26,7 @@ This document explains how these tutorials and repositories were built, who wrot
 
 ## Who wrote what
 
-Note: In the "Tutorial prose" row, "passages" refers to narrative prose paragraphs or a distinct set of bullet points. Percentages and thresholds are calculated relative to the final surviving text; text that was removed entirely is excluded from the total volume before determining the majority. Tables, troubleshooting sections, and generated reference sections (Cross-references and file links included) are treated separately.
+> Note: In the "Tutorial prose" row, "passages" refers to narrative prose paragraphs or a distinct set of bullet points. Percentages and thresholds are calculated relative to the final surviving text; text that was removed entirely is excluded from the total volume before determining the majority. Tables, troubleshooting sections, and generated reference sections (Cross-references and file links included) are treated separately.
 
 | Artifact | Primary Author | AI Role | Human Role |
 |----------|---------------|---------|--------------|
@@ -34,11 +34,11 @@ Note: In the "Tutorial prose" row, "passages" refers to narrative prose paragrap
 | Tutorial prose (Before feedback) | Mixed | Generated every initial draft. Also identified missing/incomplete/under-explained sections and generated additional draft prose for them. | Edited with varying intensity— <ins>the majority of narrative blocks (passages) received slight to moderate edits, while the remaining sections were either removed entirely or kept as-is.</ins> Tables were mostly preserved after fact-checking, with unverified AI data columns or tables removed upon secondary review. |
 | Code snippets | AI (human-directed) | Specifically ordered only to use code snippets from existing working code / Sometimes code is minimized and simplified to go with the demo| — |
 | Prerequisites/Dependencies/Project setup Sections | AI | Generated initial Prerequisites, Dependencies, and Project setup sections by reading `package.json`, source structure, and existing tutorials. | Directed section structure and provided reference examples from other tutorials |
-| Troubleshooting | Mixed | AI drafted entries from manually recorded debug logs | Sometimes corrected, mostly kept as is or slightly tweaked |
+| Troubleshooting | Mixed | AI drafted entries from recorded debug logs | For most tutorials, they were kept as-is, while a few were slightly tweaked or removed for clarity. |
 | Screenshots, console logs | Human | — | Captured live from a local development environment during on-chain testing |
 | README(s) | AI (human-directed) | Generated from project structure and feature lists / sometimes from tutorial | — |
 | Grammar and Midnight style format | AI | Applied `Style.md` rules (active voice, sentence case, Oxford comma, etc.) | Caught AI over-edits in general |
-| Section titles and headings | Mixed | AI generated initial titles for all passages, Formatted titles markdown + numbers | Most kept as-is; some corrected or edited for clarity |
+| Section titles and headings | Mixed | AI generated initial titles for all passages, Formatted titles markdown + numbers | For most of tutorials kept as-is; sometimes corrected or edited for clarity |
 | Cross-references and file links | AI | Generated inline links to source files (e.g., "view the full code in...") | — |
 
 ## How feedback was applied
