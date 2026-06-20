@@ -2,7 +2,8 @@
 
 This document explains how these tutorials and repositories were built, who wrote what, and how to interpret the contents.
 
-> **Note on Precision:** The distribution of work and roles shown below is a high-level estimate to provide transparency on the workflow; it does not represent an absolute, line-by-line breakdown of contributions.
+> **Disclaimer:** The attributions, environment scopes, and metrics detailed in this document represent a best-effort, rough estimate of the development process and should not be taken as an absolute or mathematically precise accounting.
+
 
 ## Scope
 
